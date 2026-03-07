@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreeNet MTG Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1525;
+    --bg3: #141928;
+    --surface: #1a2035;
+    --surface2: #1f2640;
+    --border: #2a3450;
+    --border2: #334060;
+    --cyan: #00e5ff;
+    --cyan2: #00b8d4;
+    --green: #00e676;
+    --red: #ff1744;
+    --yellow: #ffd740;
+    --text: #e8eaf0;
+    --text2: #8892a8;
+    --text3: #4a5568;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Layout ── */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo .logo-text {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .sidebar-logo .logo-sub {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+
+  .nav { flex: 1; padding: 12px 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text2);
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    user-select: none;
+  }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: rgba(0,229,255,0.1); color: var(--cyan); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .main { margin-left: 220px; flex: 1; padding: 24px; max-width: calc(100vw - 220px); }
+
+  /* ── Header ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-title { font-size: 20px; font-weight: 600; }
+  .page-title span { color: var(--cyan); }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 1100px) { .grid-4 { grid-template-columns: repeat(2,1fr); } }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; font-family: var(--mono); }
+  .stat-value.cyan { color: var(--cyan); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.red { color: var(--red); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 10px 14px;
+    color: var(--text3); font-weight: 500;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 500; font-family: var(--mono);
+  }
+  .badge-green { background: rgba(0,230,118,0.12); color: var(--green); }
+  .badge-red { background: rgba(255,23,68,0.12); color: var(--red); }
+  .badge-yellow { background: rgba(255,215,64,0.12); color: var(--yellow); }
+  .badge-cyan { background: rgba(0,229,255,0.12); color: var(--cyan); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px; border: none;
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.15s; font-family: var(--sans);
+  }
+  .btn-primary { background: var(--cyan); color: #000; }
+  .btn-primary:hover { background: var(--cyan2); }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(255,23,68,0.3); }
+  .btn-danger:hover { background: rgba(255,23,68,0.1); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Inputs ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+  .form-input {
+    width: 100%; padding: 9px 12px;
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: 8px; color: var(--text); font-size: 13px;
+    font-family: var(--sans); outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--cyan); }
+  .form-input::placeholder { color: var(--text3); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+  }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+    width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── Link box ── */
+  .link-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+    font-family: var(--mono); font-size: 11px; color: var(--cyan);
+    cursor: pointer; transition: border-color 0.15s;
+    max-width: 320px; overflow: hidden;
+  }
+  .link-box:hover { border-color: var(--cyan); }
+  .link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+  /* ── Node card ── */
+  .node-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .node-card:hover { border-color: var(--border2); }
+  .node-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .node-name { font-size: 15px; font-weight: 600; }
+  .node-host { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+  .node-stats { display: flex; gap: 20px; margin: 12px 0; }
+  .node-stat { }
+  .node-stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .node-stat-value { font-size: 20px; font-weight: 700; font-family: var(--mono); color: var(--cyan); }
+  .node-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+  /* ── Toast ── */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 10px; padding: 12px 16px;
+    font-size: 13px; min-width: 220px;
+    animation: slideIn 0.2s ease;
+  }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+  .toast.info { border-left: 3px solid var(--cyan); }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 48px 24px; color: var(--text3); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; }
+
+  /* ── Loading ── */
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border2);
+    border-top-color: var(--cyan); border-radius: 50%;
+    animation: spin 0.6s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-overlay {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px; gap: 12px; color: var(--text2); font-size: 13px;
+  }
+
+  /* ── Actions row ── */
+  .actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 13px; font-weight: 600; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── Auth token ────────────────────────────────────────────
+const getToken = () => localStorage.getItem('mtg_token') || '';
+const setToken = (t) => localStorage.setItem('mtg_token', t);
+
+// ── API ───────────────────────────────────────────────────
+const api = async (method, path, body) => {
+  const r = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-auth-token': getToken(),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401) { window.location.reload(); return; }
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'API error');
+  return data;
+};
+
+// ── Toast ─────────────────────────────────────────────────
+let toastCb = null;
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  toastCb = (msg, type='info') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+  };
+  return toasts;
+}
+const toast = (msg, type) => toastCb && toastCb(msg, type);
+
+// ── Copy ──────────────────────────────────────────────────
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Скопировано!', 'success'));
+}
+
+// ── Login ─────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [token, setToken_] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    try {
+      await api('GET', '/api/nodes', null);
+      toast('Подключено!', 'success');
+      onLogin(token);
+    } catch {
+      toast('Неверный токен', 'error');
+    }
+  };
+
+  useEffect(() => { setToken(token); }, [token]);
+
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>
+      <div className="modal" style={{maxWidth:360}}>
+        <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:32,marginBottom:8}}>🔒</div>
+          <div style={{fontFamily:'var(--mono)',fontSize:18,fontWeight:700,color:'var(--cyan)'}}>MTG PANEL</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:4}}>FreeNet Proxy Manager</div>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label className="form-label">Auth Token</label>
+            <input className="form-input" type="password" placeholder="Введи токен..." value={token}
+              onChange={e => setToken_(e.target.value)} autoFocus />
+          </div>
+          <button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} type="submit">
+            Войти
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────
+function Dashboard({ nodes, onSelectNode }) {
+  const [status, setStatus] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const s = await api('GET', '/api/status');
+      setStatus(s);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadStatus(); const t = setInterval(loadStatus, 15000); return () => clearInterval(t); }, []);
+
+  const totalUsers = nodes.reduce((a, n) => a + (n._userCount || 0), 0);
+  const onlineNodes = status.filter(s => s.online).length;
+  const totalContainers = status.reduce((a, s) => a + (s.containers || 0), 0);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-title">Панель управления <span>FreeNet</span></div>
+        <button className="btn btn-ghost btn-sm" onClick={loadStatus}>↻ Обновить</button>
+      </div>
+
+      <div className="grid-4">
+        <div className="stat-card">
+          <div className="stat-label">Нод</div>
+          <div className="stat-value cyan">{nodes.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Онлайн</div>
+          <div className="stat-value green">{onlineNodes}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Контейнеров</div>
+          <div className="stat-value yellow">{totalContainers}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Юзеров</div>
+          <div className="stat-value cyan">{totalUsers}</div>
+        </div>
+      </div>
+
+      <div className="section-title">Ноды</div>
+
+      {loading ? (
+        <div className="loading-overlay"><div className="spinner"/> Загружаю статус...</div>
+      ) : (
+        <div className="grid-2">
+          {nodes.map(node => {
+            const s = status.find(x => x.id === node.id) || {};
+            return (
+              <div className="node-card" key={node.id}>
+                <div className="node-header">
+                  <div>
+                    <div className="node-name">{node.name}</div>
+                    <div className="node-host">{node.host}</div>
+                  </div>
+                  <span className={`badge ${s.online ? 'badge-green' : 'badge-red'}`}>
+                    <span className="dot"/>
+                    {s.online ? 'online' : 'offline'}
+                  </span>
+                </div>
+                <div className="node-stats">
+                  <div className="node-stat">
+                    <div className="node-stat-label">Контейнеров</div>
+                    <div className="node-stat-value">{s.containers || 0}</div>
+                  </div>
+                </div>
+                <div className="node-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => onSelectNode(node)}>
+                    Управление
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {nodes.length === 0 && (
+            <div style={{gridColumn:'1/-1'}}>
+              <div className="empty">
+                <div className="empty-icon">🖥️</div>
+                <div className="empty-text">Нет нод. Добавь первую!</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Node Modal ────────────────────────────────────────────
+function NodeModal({ node, onClose, onSave }) {
+  const [form, setForm] = useState(node || { name:'', host:'', ssh_user:'root', ssh_port:22, base_dir:'/opt/mtg/users', start_port:4433, ssh_password:'', ssh_key:'' });
+  const [loading, setLoading] = useState(false);
+  const [authType, setAuthType] = useState(node?.ssh_key ? 'key' : 'password');
+
+  const submit = async () => {
+    if (!form.name || !form.host) { toast('Заполни обязательные поля', 'error'); return; }
+    setLoading(true);
+    try {
+      if (node) {
+        await api('PUT', `/api/nodes/${node.id}`, form);
+        toast('Нода обновлена', 'success');
+      } else {
+        await api('POST', '/api/nodes', form);
+        toast('Нода добавлена', 'success');
+      }
+      onSave();
+    } catch(e) { toast(e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+
+  const set = (k, v) => setForm(f => ({...f, [k]: v}));
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">{node ? '✏️ Редактировать ноду' : '➕ Добавить ноду'}</div>
+
+        <div className="form-group">
+          <label className="form-label">Название *</label>
+          <input className="form-input" placeholder="Helsinki #1" value={form.name} onChange={e => set('name', e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Host / IP или домен *</label>
+          <input className="form-input" placeholder="hel.maks68.com или 1.2.3.4" value={form.host} onChange={e => set('host', e.target.value)} />
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div className="form-group">
+            <label className="form-label">SSH User</label>
+            <input className="form-input" placeholder="root" value={form.ssh_user} onChange={e => set('ssh_user', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">SSH Port</label>
+            <input className="form-input" type="number" placeholder="22" value={form.ssh_port} onChange={e => set('ssh_port', parseInt(e.target.value))} />
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div className="form-group">
+            <label className="form-label">Base Dir</label>
+            <input className="form-input" placeholder="/opt/mtg/users" value={form.base_dir} onChange={e => set('base_dir', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Start Port</label>
+            <input className="form-input" type="number" placeholder="4433" value={form.start_port} onChange={e => set('start_port', parseInt(e.target.value))} />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Аутентификация SSH</label>
+          <div style={{display:'flex',gap:8,marginBottom:10}}>
+            <button className={`btn btn-sm ${authType==='password'?'btn-primary':'btn-ghost'}`} onClick={() => setAuthType('password')}>Пароль</button>
+            <button className={`btn btn-sm ${authType==='key'?'btn-primary':'btn-ghost'}`} onClick={() => setAuthType('key')}>SSH ключ</button>
+          </div>
+          {authType === 'password' ? (
+            <input className="form-input" type="password" placeholder="SSH пароль" value={form.ssh_password} onChange={e => set('ssh_password', e.target.value)} />
+          ) : (
+            <textarea className="form-input" rows={5} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." value={form.ssh_key} onChange={e => set('ssh_key', e.target.value)} style={{resize:'vertical',fontFamily:'var(--mono)',fontSize:11}} />
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Отмена</button>
+          <button className="btn btn-primary" onClick={submit} disabled={loading}>
+            {loading ? <span className="spinner" style={{width:14,height:14}}/> : null}
+            {node ? 'Сохранить' : 'Добавить'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Nodes Page ────────────────────────────────────────────
+function NodesPage({ nodes, onReload }) {
+  const [modal, setModal] = useState(null);
+
+  const deleteNode = async (node) => {
+    if (!confirm(`Удалить ноду "${node.name}"?`)) return;
+    await api('DELETE', `/api/nodes/${node.id}`);
+    toast('Нода удалена', 'success');
+    onReload();
+  };
+
+  const checkNode = async (node) => {
+    toast(`Проверяю ${node.name}...`, 'info');
+    const r = await api('GET', `/api/nodes/${node.id}/check`);
+    toast(r.online ? `${node.name}: онлайн ✅` : `${node.name}: недоступна ❌`, r.online ? 'success' : 'error');
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-title">🖥️ <span>Ноды</span></div>
+        <button className="btn btn-primary" onClick={() => setModal('new')}>+ Добавить ноду</button>
+      </div>
+
+      <div className="card">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Название</th><th>Host / IP</th><th>SSH</th><th>Порты</th><th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map(node => (
+                <tr key={node.id}>
+                  <td><b>{node.name}</b></td>
+                  <td style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--cyan)'}}>{node.host}</td>
+                  <td style={{fontSize:12}}>{node.ssh_user}:{node.ssh_port}</td>
+                  <td style={{fontSize:12}}>{node.start_port}+</td>
+                  <td>
+                    <div className="actions-row">
+                      <button className="btn btn-ghost btn-sm" onClick={() => checkNode(node)}>Ping</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setModal(node)}>Ред.</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => deleteNode(node)}>Удалить</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {nodes.length === 0 && (
+                <tr><td colSpan={6}><div className="empty"><div className="empty-icon">🖥️</div><div className="empty-text">Нет нод</div></div></td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {modal && (
+        <NodeModal
+          node={modal === 'new' ? null : modal}
+          onClose={() => setModal(null)}
+          onSave={() => { setModal(null); onReload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Add User Modal ────────────────────────────────────────
+function AddUserModal({ nodeId, onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) { toast('Введи имя', 'error'); return; }
+    setLoading(true);
+    try {
+      const user = await api('POST', `/api/nodes/${nodeId}/users`, { name: name.trim() });
+      toast(`Юзер ${user.name} создан`, 'success');
+      onSave(user);
+    } catch(e) { toast(e.message, 'error'); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{maxWidth:360}}>
+        <div className="modal-title">➕ Добавить юзера</div>
+        <div className="form-group">
+          <label className="form-label">Имя (латиница, без пробелов)</label>
+          <input className="form-input" placeholder="ivan" value={name}
+            onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,''))}
+            onKeyDown={e => e.key === 'Enter' && submit()} autoFocus />
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Отмена</button>
+          <button className="btn btn-primary" onClick={submit} disabled={loading}>
+            {loading ? <span className="spinner" style={{width:14,height:14}}/> : null}
+            Создать
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Users Page ────────────────────────────────────────────
+function UsersPage({ node, onBack }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [busy, setBusy] = useState({});
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const u = await api('GET', `/api/nodes/${node.id}/users`);
+      setUsers(u);
+    } finally { setLoading(false); }
+  }, [node.id]);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  const setBusyFor = (name, val) => setBusy(b => ({...b, [name]: val}));
+
+  const removeUser = async (user) => {
+    if (!confirm(`Удалить ${user.name}?`)) return;
+    setBusyFor(user.name, true);
+    try {
+      await api('DELETE', `/api/nodes/${node.id}/users/${user.name}`);
+      toast(`${user.name} удалён`, 'success');
+      loadUsers();
+    } catch(e) { toast(e.message, 'error'); }
+    finally { setBusyFor(user.name, false); }
+  };
+
+  const toggleUser = async (user) => {
+    const action = user.running ? 'stop' : 'start';
+    setBusyFor(user.name, true);
+    try {
+      await api('POST', `/api/nodes/${node.id}/users/${user.name}/${action}`);
+      toast(`${user.name} ${action === 'stop' ? 'остановлен' : 'запущен'}`, 'success');
+      loadUsers();
+    } catch(e) { toast(e.message, 'error'); }
+    finally { setBusyFor(user.name, false); }
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Назад</button>
+          <div>
+            <div className="page-title">👥 <span>{node.name}</span></div>
+            <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{node.host}</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-ghost btn-sm" onClick={loadUsers}>↻ Обновить</button>
+          <button className="btn btn-primary" onClick={() => setModal(true)}>+ Добавить юзера</button>
+        </div>
+      </div>
+
+      <div className="card">
+        {loading ? (
+          <div className="loading-overlay"><div className="spinner"/> Загружаю...</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Юзер</th><th>Порт</th><th>Подкл.</th><th>Статус</th><th>Ссылка</th><th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(user => (
+                  <tr key={user.id}>
+                    <td><b style={{fontFamily:'var(--mono)'}}>{user.name}</b></td>
+                    <td><span className="badge badge-cyan">{user.port}</span></td>
+                    <td><span style={{fontFamily:'var(--mono)',fontSize:13}}>{user.connections}</span></td>
+                    <td>
+                      <span className={`badge ${user.running ? 'badge-green' : 'badge-red'}`}>
+                        <span className="dot"/>
+                        {user.running ? 'работает' : 'стоп'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="link-box" onClick={() => copyText(user.link)} title={user.link}>
+                        <span>📋</span>
+                        <span className="link-text">{user.link}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="actions-row">
+                        <button
+                          className={`btn btn-sm ${user.running ? 'btn-ghost' : 'btn-primary'}`}
+                          onClick={() => toggleUser(user)}
+                          disabled={busy[user.name]}
+                        >
+                          {busy[user.name] ? <span className="spinner" style={{width:12,height:12}}/> : (user.running ? '⏸' : '▶')}
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => removeUser(user)}
+                          disabled={busy[user.name]}
+                        >🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={6}>
+                    <div className="empty">
+                      <div className="empty-icon">👤</div>
+                      <div className="empty-text">Нет юзеров. Добавь первого!</div>
+                    </div>
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {modal && (
+        <AddUserModal
+          nodeId={node.id}
+          onClose={() => setModal(false)}
+          onSave={() => { setModal(false); loadUsers(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────
+function App() {
+  const [authed, setAuthed] = useState(!!getToken());
+  const [page, setPage] = useState('dashboard');
+  const [nodes, setNodes] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const toasts = useToast();
+
+  const loadNodes = useCallback(async () => {
+    try {
+      const n = await api('GET', '/api/nodes');
+      setNodes(n || []);
+    } catch {}
+  }, []);
+
+  useEffect(() => { if (authed) loadNodes(); }, [authed]);
+
+  const onLogin = (token) => { setToken(token); setAuthed(true); loadNodes(); };
+
+  const selectNode = (node) => { setSelectedNode(node); setPage('users'); };
+
+  if (!authed) return (
+    <>
+      <Login onLogin={onLogin} />
+      <Toasts toasts={toasts} />
+    </>
+  );
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <div className="logo-text">MTG Panel</div>
+          <div className="logo-sub">FreeNet Control</div>
+        </div>
+        <nav className="nav">
+          <div className={`nav-item ${page==='dashboard'?'active':''}`} onClick={() => setPage('dashboard')}>
+            <span className="icon">📊</span> Дашборд
+          </div>
+          <div className={`nav-item ${page==='nodes'?'active':''}`} onClick={() => setPage('nodes')}>
+            <span className="icon">🖥️</span> Ноды
+          </div>
+          <div className={`nav-item ${page==='users'?'active':''}`} onClick={() => { if(!selectedNode) setPage('dashboard'); else setPage('users'); }}>
+            <span className="icon">👥</span> Юзеры
+          </div>
+        </nav>
+        <div style={{padding:'12px 16px',borderTop:'1px solid var(--border)'}}>
+          <div style={{fontSize:11,color:'var(--text3)'}}>
+            <div>Нод: {nodes.length}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{marginTop:8,width:'100%',justifyContent:'center'}}
+            onClick={() => { setToken(''); setAuthed(false); }}>
+            Выйти
+          </button>
+        </div>
+      </aside>
+
+      <main className="main">
+        {page === 'dashboard' && <Dashboard nodes={nodes} onSelectNode={(n) => selectNode(n)} />}
+        {page === 'nodes' && <NodesPage nodes={nodes} onReload={loadNodes} />}
+        {page === 'users' && selectedNode && <UsersPage node={selectedNode} onBack={() => setPage('dashboard')} />}
+        {page === 'users' && !selectedNode && (
+          <div>
+            <div className="page-header"><div className="page-title">👥 <span>Юзеры</span></div></div>
+            <div className="card">
+              <div className="empty">
+                <div className="empty-icon">🖥️</div>
+                <div className="empty-text">Выбери ноду на дашборде</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <Toasts toasts={toasts} />
+    </div>
+  );
+}
+
+function Toasts({ toasts }) {
+  return (
+    <div className="toast-container">
+      {toasts.map(t => (
+        <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+</script>
+</body>
+</html>
