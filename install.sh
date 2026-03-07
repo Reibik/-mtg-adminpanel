@@ -1,4 +1,5 @@
 #!/bin/bash
+set +H  # отключаем history expansion (для токенов со спецсимволами)
 
 # ============================================================
 #  MTG AdminPanel — Install Script
@@ -56,7 +57,7 @@ echo ""
 # AUTH_TOKEN
 while true; do
     echo -ne "${WHITE}Токен авторизации${NC} ${DIM}(придумай пароль для входа в панель)${NC}: "
-    read -r AUTH_TOKEN
+    IFS= read -r AUTH_TOKEN
     if [ ${#AUTH_TOKEN} -ge 6 ]; then
         break
     else
@@ -122,7 +123,7 @@ print_ok "Зависимости установлены"
 # ── Установка Docker ─────────────────────────────────────────
 if ! command -v docker &> /dev/null; then
     print_step "Установка Docker..."
-    curl -fsSL https://get.docker.com | sh -q
+    curl -fsSL https://get.docker.com | sh
     print_ok "Docker установлен"
 else
     print_ok "Docker уже установлен ($(docker --version | cut -d' ' -f3 | tr -d ','))"
@@ -143,7 +144,7 @@ print_step "Создание конфигурации..."
 mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/ssh_keys"
 
 cat > "$INSTALL_DIR/.env" << EOF
-AUTH_TOKEN=$AUTH_TOKEN
+AUTH_TOKEN="$AUTH_TOKEN"
 PORT=$PORT
 DATA_DIR=/data
 EOF
@@ -153,7 +154,7 @@ print_ok "Конфигурация создана"
 # ── Запуск Docker Compose ────────────────────────────────────
 print_step "Запуск панели..."
 cd "$INSTALL_DIR"
-docker compose up -d --build -q
+docker compose up -d --build 2>&1 | tail -5
 sleep 3
 
 if docker ps | grep -q mtg-panel; then
