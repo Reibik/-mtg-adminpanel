@@ -57,7 +57,7 @@ echo ""
 # AUTH_TOKEN
 while true; do
     echo -ne "${WHITE}Токен авторизации${NC} ${DIM}(придумай пароль для входа в панель)${NC}: "
-    IFS= read -r AUTH_TOKEN
+    IFS= read -r AUTH_TOKEN < /dev/tty
     if [ ${#AUTH_TOKEN} -ge 6 ]; then
         break
     else
@@ -67,7 +67,7 @@ done
 
 # PORT
 echo -ne "${WHITE}Порт панели${NC} ${DIM}[3000]${NC}: "
-read -r PORT_INPUT
+IFS= read -r PORT_INPUT < /dev/tty
 PORT=${PORT_INPUT:-3000}
 
 # SSL
@@ -76,16 +76,16 @@ echo -e "${WHITE}Нужен ли SSL?${NC}"
 echo -e "  ${CYAN}[1]${NC} Нет — только HTTP (http://IP:$PORT)"
 echo -e "  ${CYAN}[2]${NC} Да — через Nginx + Let's Encrypt (нужен домен)"
 echo -ne "  Выбор ${DIM}[1]${NC}: "
-read -r SSL_CHOICE
+IFS= read -r SSL_CHOICE < /dev/tty
 SSL_CHOICE=${SSL_CHOICE:-1}
 
 DOMAIN=""
 EMAIL=""
 if [ "$SSL_CHOICE" == "2" ]; then
     echo -ne "${WHITE}Домен${NC} ${DIM}(например proxy.yourdomain.com)${NC}: "
-    read -r DOMAIN
+    IFS= read -r DOMAIN < /dev/tty
     echo -ne "${WHITE}Email${NC} ${DIM}(для Let's Encrypt)${NC}: "
-    read -r EMAIL
+    IFS= read -r EMAIL < /dev/tty
 fi
 
 # ── Подтверждение ────────────────────────────────────────────
@@ -102,7 +102,7 @@ fi
 echo -e "${DIM}────────────────────────────────────────────────────${NC}"
 echo ""
 echo -ne "${WHITE}Начать установку? (y/N)${NC}: "
-read -r CONFIRM
+IFS= read -r CONFIRM < /dev/tty
 if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
     echo -e "${DIM}Отменено.${NC}"
     exit 0
@@ -144,7 +144,7 @@ print_step "Создание конфигурации..."
 mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/ssh_keys"
 
 cat > "$INSTALL_DIR/.env" << EOF
-AUTH_TOKEN="$AUTH_TOKEN"
+AUTH_TOKEN=$AUTH_TOKEN
 PORT=$PORT
 DATA_DIR=/data
 EOF
