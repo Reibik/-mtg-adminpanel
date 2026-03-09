@@ -214,6 +214,26 @@ app.get('/api/nodes/:id/users', async (req, res) => {
   }
 });
 
+app.post('/api/nodes/:id/sync', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Node not found' });
+  try {
+    const remoteUsers = await ssh.getRemoteUsers(node);
+    let imported = 0;
+    for (const u of remoteUsers) {
+      const exists = db.prepare('SELECT id FROM users WHERE node_id = ? AND name = ?').get(req.params.id, u.name);
+      if (!exists) {
+        db.prepare('INSERT INTO users (node_id, name, port, secret, note, expires_at, traffic_limit_gb) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(req.params.id, u.name, u.port, u.secret, '', null, null);
+        imported++;
+      }
+    }
+    res.json({ imported, total: remoteUsers.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/nodes/:id/users', async (req, res) => {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
   if (!node) return res.status(404).json({ error: 'Node not found' });

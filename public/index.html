@@ -1008,6 +1008,14 @@ function UsersPage({ node, onBack }) {
   const [modal, setModal] = useState(false);
   const [busy, setBusy] = useState({});
 
+  const syncUsers = async () => {
+    try {
+      const r = await api('POST', `/api/nodes/${node.id}/sync`);
+      toast(`Синхронизировано: ${r.imported} новых юзеров из ${r.total}`, r.imported > 0 ? 'success' : 'info');
+      loadUsers();
+    } catch(e) { toast(e.message, 'error'); }
+  };
+
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -1080,6 +1088,7 @@ function UsersPage({ node, onBack }) {
         </div>
         <div style={{display:'flex',gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={loadUsers}>↻ Обновить</button>
+          <button className="btn btn-ghost btn-sm" onClick={syncUsers}>🔄 Синхронизировать</button>
           <button className="btn btn-primary" onClick={() => setModal(true)}>+ Добавить юзера</button>
         </div>
       </div>
