@@ -1,4 +1,5 @@
 #!/bin/bash
+cd /tmp  # ensure valid working directory from the start
 set +H  # отключаем history expansion (для токенов со спецсимволами)
 
 # ============================================================
