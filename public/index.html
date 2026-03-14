@@ -754,8 +754,9 @@ function VersionBlock({ nodes }) {
   const [versions, setVersions] = useState({});
   const [updating, setUpdating] = useState({});
   const [checking, setChecking] = useState(false);
-  const [updatingPanel, setUpdatingPanel] = useState(false);
   const [open, setOpen] = useState(false);
+  const [latestRelease, setLatestRelease] = useState(null);
+  const [checkingRelease, setCheckingRelease] = useState(false);
 
   const checkVersions = useCallback(async () => {
     if(!nodes.length) return;
@@ -771,7 +772,18 @@ function VersionBlock({ nodes }) {
     setChecking(false);
   }, [nodes]);
 
+  const checkLatestRelease = useCallback(async () => {
+    setCheckingRelease(true);
+    try {
+      const r = await fetch('https://api.github.com/repos/MaksimTMB/mtg-adminpanel/releases/latest');
+      const data = await r.json();
+      if(data.tag_name) setLatestRelease({ tag: data.tag_name, url: data.html_url });
+    } catch {}
+    finally { setCheckingRelease(false); }
+  }, []);
+
   useEffect(() => { if(nodes.length) checkVersions(); }, [nodes.length]);
+  useEffect(() => { if(open && !latestRelease) checkLatestRelease(); }, [open]);
 
   const updateNode = async (node) => {
     setUpdating(u => ({...u, [node.id]: true}));
@@ -811,7 +823,7 @@ function VersionBlock({ nodes }) {
 
       {open && (
         <div className="overlay" onClick={e=>e.target===e.currentTarget&&setOpen(false)}>
-          <div className="modal" style={{maxWidth:640}}>
+          <div className="modal" style={{maxWidth:700}}>
             <div className="modal-head">
               <div className="modal-title"><I.Activity/> Версии и обновления</div>
               <button className="modal-close" onClick={()=>setOpen(false)}><I.X/></button>
@@ -823,35 +835,57 @@ function VersionBlock({ nodes }) {
               <div style={{marginBottom:20,padding:'14px 16px',background:'var(--bg3)',borderRadius:10,border:'1px solid var(--b1)'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <div style={{width:32,height:32,borderRadius:8,background:'var(--grad)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <div style={{width:34,height:34,borderRadius:9,background:'var(--grad)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                       <I.Zap/>
                     </div>
                     <div>
                       <div style={{fontWeight:600,fontSize:13}}>MTG AdminPanel</div>
-                      <div style={{fontSize:11,color:'var(--t3)',fontFamily:'var(--mono)',marginTop:2}}>
-                        Текущая: <span style={{color:'var(--vi)'}}>{PANEL_VERSION}</span>
+                      <div style={{fontSize:11,color:'var(--t3)',fontFamily:'var(--mono)',marginTop:3,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                        <span>Установлена: <span style={{color:'var(--vi)'}}>{PANEL_VERSION}</span></span>
+                        {checkingRelease
+                          ? <span style={{color:'var(--t3)',display:'inline-flex',alignItems:'center',gap:4}}><span className="spin spin-sm" style={{width:9,height:9}}/> проверяю...</span>
+                          : latestRelease
+                            ? latestRelease.tag !== PANEL_VERSION
+                              ? <span className="badge badge-amber" style={{fontSize:10}}>↑ новая {latestRelease.tag}</span>
+                              : <span className="badge badge-green" style={{fontSize:10}}>актуальная</span>
+                            : null
+                        }
                       </div>
                     </div>
                   </div>
-                  <a href="https://github.com/MaksimTMB/mtg-adminpanel/releases" target="_blank"
-                    className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>
-                    <I.Download/> GitHub Releases
-                  </a>
+                  <div style={{display:'flex',gap:8,flexShrink:0}}>
+                    {latestRelease && latestRelease.tag !== PANEL_VERSION && (
+                      <a href={latestRelease.url} target="_blank" className="btn btn-primary btn-sm" style={{textDecoration:'none'}}>
+                        <I.Download/> {latestRelease.tag}
+                      </a>
+                    )}
+                    <a href="https://github.com/MaksimTMB/mtg-adminpanel/releases" target="_blank"
+                      className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>
+                      Releases
+                    </a>
+                  </div>
                 </div>
               </div>
 
               {/* Nodes versions table */}
-              <div style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
-                Версия MTG на нодах
+              <div style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:8}}>
+                MTG прокси на нодах
               </div>
               <table className="ver-table" style={{tableLayout:'fixed',width:'100%'}}>
+                <colgroup>
+                  <col style={{width:'20%'}}/>
+                  <col style={{width:'27%'}}/>
+                  <col style={{width:'15%'}}/>
+                  <col style={{width:'22%'}}/>
+                  <col style={{width:'16%'}}/>
+                </colgroup>
                 <thead>
                   <tr>
-                    <th style={{width:'22%'}}>Нода</th>
-                    <th style={{width:'28%'}}>Host</th>
-                    <th style={{width:'22%'}}>Версия</th>
-                    <th style={{width:'18%'}}>Дата сборки</th>
-                    <th style={{width:'10%'}}></th>
+                    <th>Нода</th>
+                    <th>Host</th>
+                    <th>Версия</th>
+                    <th>Дата сборки</th>
+                    <th style={{textAlign:'right'}}>Обновить</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -862,10 +896,10 @@ function VersionBlock({ nodes }) {
                     return (
                       <tr key={n.id}>
                         <td style={{fontWeight:600,fontSize:13}}>{n.name}</td>
-                        <td style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t3)'}}>{n.host}</td>
+                        <td style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n.host}</td>
                         <td>
                           {checking && !raw
-                            ? <span style={{color:'var(--t3)',fontSize:11}}>проверка...</span>
+                            ? <span style={{color:'var(--t3)',fontSize:11}}>...</span>
                             : !raw
                               ? <span style={{color:'var(--t3)',fontSize:11}}>—</span>
                               : raw === 'error'
@@ -875,8 +909,8 @@ function VersionBlock({ nodes }) {
                         </td>
                         <td style={{fontSize:11,color:'var(--t2)'}}>{parsed?.date || '—'}</td>
                         <td style={{textAlign:'right'}}>
-                          <button className="btn btn-primary btn-sm" onClick={()=>updateNode(n)}
-                            disabled={upd||!raw||raw==='error'} style={{minWidth:80}}>
+                          <button className="btn btn-secondary btn-sm" onClick={()=>updateNode(n)}
+                            disabled={upd||!raw||raw==='error'}>
                             {upd ? <><span className="spin spin-sm"/> ...</> : <><I.Download/> Update</>}
                           </button>
                         </td>
@@ -1453,9 +1487,14 @@ function UsersPage({ node, onBack }) {
           <div className="table-wrap">
             <table>
               <thead><tr>
-                <th>Юзер</th><th>Порт</th><th>Подкл.</th><th>Трафик</th>
-                <th>Статус</th><th>Истекает</th><th>Лимит</th><th>Заметка</th>
-                <th>Ссылка</th><th></th>
+                <th>Юзер</th>
+                <th>Порт</th>
+                <th>Подкл.</th>
+                <th>Трафик</th>
+                <th>Статус</th>
+                <th>Срок / Лимит</th>
+                <th>Заметка</th>
+                <th>Действия</th>
               </tr></thead>
               <tbody>
                 {users.map(u => (
@@ -1464,14 +1503,14 @@ function UsersPage({ node, onBack }) {
                     <td><span className="badge badge-purple">{u.port}</span></td>
                     <td>
                       <span style={{fontFamily:'var(--mono)',color:'var(--vi)',cursor:'pointer',fontWeight:500,fontSize:13}}
-                        onClick={()=>setChartU(chartU===u.name?null:u.name)} title="График">
+                        onClick={()=>setChartU(chartU===u.name?null:u.name)} title="Показать график">
                         {u.connections}
                       </span>
                     </td>
                     <td>
                       {traffic[u.name]
-                        ? <span className="traf"><span className="rx">↓{traffic[u.name].rx}</span><span className="tx">↑{traffic[u.name].tx}</span></span>
-                        : <span style={{color:'var(--t3)'}}>—</span>}
+                        ? <span className="traf"><span className="rx">↓{traffic[u.name].rx}</span><span className="tx"> ↑{traffic[u.name].tx}</span></span>
+                        : <span style={{color:'var(--t3)',fontSize:11}}>—</span>}
                     </td>
                     <td>
                       <span className={`badge ${u.running?'badge-green':'badge-red'}`}>
@@ -1479,28 +1518,31 @@ function UsersPage({ node, onBack }) {
                         {u.running?'active':'stopped'}
                       </span>
                     </td>
-                    <td>{expiry(u.expires_at)||<span style={{color:'var(--t3)',fontSize:11}}>∞</span>}</td>
-                    <td style={{fontSize:11,color:'var(--t2)',fontFamily:'var(--mono)'}}>{u.traffic_limit_gb?`${u.traffic_limit_gb}G`:'∞'}</td>
-                    <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,color:'var(--t2)'}} title={u.note}>{u.note||'—'}</td>
                     <td>
-                      <div className="link-box" onClick={()=>copyText(u.link)} title={u.link}>
-                        <I.Copy/><span className="link-txt">{u.link}</span>
+                      <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                        {u.expires_at && <div>{expiry(u.expires_at)}</div>}
+                        {u.traffic_limit_gb && <span style={{fontSize:10,color:'var(--t3)',fontFamily:'var(--mono)'}}>{u.traffic_limit_gb}GB</span>}
+                        {!u.expires_at && !u.traffic_limit_gb && <span style={{color:'var(--t3)',fontSize:11}}>∞</span>}
                       </div>
+                    </td>
+                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,color:'var(--t2)'}} title={u.note}>
+                      {u.note || <span style={{color:'var(--t3)'}}>—</span>}
                     </td>
                     <td>
                       <div className="acts">
                         <button className={`btn btn-icon btn-sm ${u.running?'btn-ghost':'btn-primary'}`}
-                          onClick={()=>toggle(u)} disabled={busy[u.name]} title={u.running?'Стоп':'Старт'}>
+                          onClick={()=>toggle(u)} disabled={busy[u.name]} title={u.running?'Остановить':'Запустить'}>
                           {busy[u.name]?<span className="spin spin-sm"/>:(u.running?<I.Pause/>:<I.Play/>)}
                         </button>
+                        <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>copyText(u.link)} title="Копировать ссылку"><I.Copy/></button>
+                        <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>setQrU(u)} title="QR-код"><I.QrCode/></button>
                         <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>setEditU(u)} title="Редактировать"><I.Edit/></button>
-                        <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>setQrU(u)} title="QR"><I.QrCode/></button>
                         <button className="btn btn-icon btn-danger btn-sm" onClick={()=>remove(u)} disabled={busy[u.name]} title="Удалить"><I.Trash/></button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {!users.length && <tr><td colSpan={10}><div className="empty"><div className="empty-icon"><I.Users/></div><div className="empty-title">Нет юзеров</div><div className="empty-desc">Добавь первого юзера</div></div></td></tr>}
+                {!users.length && <tr><td colSpan={8}><div className="empty"><div className="empty-icon"><I.Users/></div><div className="empty-title">Нет юзеров</div><div className="empty-desc">Добавь первого юзера</div></div></td></tr>}
               </tbody>
             </table>
           </div>
@@ -1549,7 +1591,7 @@ function AllUsers({ nodes, onSelectNode }) {
         {loading ? <div className="loading-center"><span className="spin"/> Загружаю...</div> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Юзер</th><th>Нода</th><th>Порт</th><th>Подкл.</th><th>Статус</th><th>Ссылка</th><th></th></tr></thead>
+              <thead><tr><th>Юзер</th><th>Нода</th><th>Порт</th><th>Подкл.</th><th>Статус</th><th>Действия</th></tr></thead>
               <tbody>
                 {all.map(u => (
                   <tr key={u.id}>
@@ -1558,11 +1600,15 @@ function AllUsers({ nodes, onSelectNode }) {
                     <td><span className="badge badge-blue">{u.port}</span></td>
                     <td><span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--vi)'}}>{u.connections}</span></td>
                     <td><span className={`badge ${u.running?'badge-green':'badge-red'}`}><span className={`dot ${u.running?'dot-live':''}`}/>{u.running?'active':'stopped'}</span></td>
-                    <td><div className="link-box" onClick={()=>copyText(u.link)} title={u.link}><I.Copy/><span className="link-txt">{u.link}</span></div></td>
-                    <td><button className="btn btn-ghost btn-sm" onClick={()=>onSelectNode(u.node)}>Управление →</button></td>
+                    <td>
+                      <div className="acts">
+                        <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>copyText(u.link)} title="Копировать ссылку"><I.Copy/></button>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>onSelectNode(u.node)}>Управление →</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
-                {!all.length && <tr><td colSpan={7}><div className="empty"><div className="empty-icon"><I.Users/></div><div className="empty-title">Нет юзеров</div></div></td></tr>}
+                {!all.length && <tr><td colSpan={6}><div className="empty"><div className="empty-icon"><I.Users/></div><div className="empty-title">Нет юзеров</div></div></td></tr>}
               </tbody>
             </table>
           </div>
