@@ -157,6 +157,21 @@ app.get('/api/nodes/:id/check-agent', async (req, res) => {
   }
 });
 
+// Update agent on node via SSH
+app.post('/api/nodes/:id/update-agent', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+  const token = process.env.AGENT_TOKEN || 'mtg-agent-secret';
+  const cmd = `bash <(curl -fsSL https://raw.githubusercontent.com/MaksimTMB/mtg-adminpanel/dev/mtg-agent/install-agent.sh) ${token}`;
+  try {
+    const r = await ssh.sshExec(node, cmd);
+    const ok = r.output.includes('health OK') || r.output.includes('installed/updated');
+    res.json({ ok, output: r.output.slice(-500) }); // last 500 chars of output
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/nodes/:id/check', async (req, res) => {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
   if (!node) return res.status(404).json({ error: 'Not found' });

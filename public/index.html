@@ -1167,6 +1167,8 @@ function NodeModal({ node, onClose, onSave }) {
     finally{setLoading(false);}
   };
 
+  const [agentUpdating, setAgentUpdating] = useState(false);
+
   const checkAgent = async () => {
     if(!node?.id) return;
     setAgentChecking(true);
@@ -1176,6 +1178,19 @@ function NodeModal({ node, onClose, onSave }) {
       toast(r.available ? 'Агент доступен ✓' : 'Агент недоступен', r.available ? 'success' : 'error');
     } catch { setAgentStatus(false); }
     finally { setAgentChecking(false); }
+  };
+
+  const updateAgent = async () => {
+    if(!node?.id) return;
+    setAgentUpdating(true);
+    toast('Обновление агента...', 'info');
+    try {
+      const r = await api('POST', `/api/nodes/${node.id}/update-agent`);
+      if(r.ok) toast('Агент обновлён ✓', 'success');
+      else toast('Ошибка обновления: ' + (r.error || r.output), 'error');
+      setAgentStatus(null);
+    } catch(e) { toast('Ошибка: ' + e.message, 'error'); }
+    finally { setAgentUpdating(false); }
   };
 
   const installCmd = `mkdir -p /opt/mtg-agent && cd /opt/mtg-agent && curl -fsSL https://raw.githubusercontent.com/MaksimTMB/mtg-adminpanel/dev/mtg-agent/install-agent.sh | bash`;
@@ -1233,6 +1248,9 @@ function NodeModal({ node, onClose, onSave }) {
               <div style={{display:'flex',gap:8}}>
                 {node && <button className="btn btn-ghost btn-sm" onClick={checkAgent} disabled={agentChecking}>
                   {agentChecking?<><span className="spin spin-sm"/> проверка</>:<><I.Wifi/> Проверить</>}
+                </button>}
+                {node && <button className="btn btn-secondary btn-sm" onClick={updateAgent} disabled={agentUpdating}>
+                  {agentUpdating?<><span className="spin spin-sm"/> обновление...</>:<><I.RefreshCw/> Обновить</>}
                 </button>}
                 <button className="btn btn-ghost btn-sm" onClick={()=>setShowInstall(!showInstall)}>
                   <I.Download/> Установить
