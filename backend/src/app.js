@@ -28,6 +28,12 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN billing_period TEXT DEFAULT 'monthly'",
     "ALTER TABLE users ADD COLUMN billing_paid_until DATETIME DEFAULT NULL",
     "ALTER TABLE users ADD COLUMN billing_status TEXT DEFAULT 'active'",
+    // v1.7.0 — device limits & auto traffic reset
+    "ALTER TABLE users ADD COLUMN max_devices INTEGER DEFAULT NULL",
+    "ALTER TABLE users ADD COLUMN traffic_reset_interval TEXT DEFAULT NULL",
+    "ALTER TABLE users ADD COLUMN next_reset_at DATETIME DEFAULT NULL",
+    "ALTER TABLE users ADD COLUMN total_traffic_rx_bytes INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN total_traffic_tx_bytes INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try { db.prepare(sql).run(); } catch (_) {}
@@ -263,12 +269,22 @@ app.post('/api/nodes/:id/users', async (req, res) => {
 });
 
 app.put('/api/nodes/:id/users/:name', (req, res) => {
-  const { note, expires_at, traffic_limit_gb, billing_price, billing_currency, billing_period, billing_paid_until, billing_status } = req.body;
+  const { note, expires_at, traffic_limit_gb, billing_price, billing_currency, billing_period,
+    billing_paid_until, billing_status, max_devices, traffic_reset_interval } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE node_id = ? AND name = ?').get(req.params.id, req.params.name);
   if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // Calculate next_reset_at if interval changed
+  let next_reset_at = user.next_reset_at;
+  const newInterval = traffic_reset_interval !== undefined ? traffic_reset_interval : user.traffic_reset_interval;
+  if (traffic_reset_interval !== undefined && traffic_reset_interval !== user.traffic_reset_interval) {
+    next_reset_at = calcNextReset(traffic_reset_interval);
+  }
+
   db.prepare(`UPDATE users SET
     note=?, expires_at=?, traffic_limit_gb=?,
-    billing_price=?, billing_currency=?, billing_period=?, billing_paid_until=?, billing_status=?
+    billing_price=?, billing_currency=?, billing_period=?, billing_paid_until=?, billing_status=?,
+    max_devices=?, traffic_reset_interval=?, next_reset_at=?
     WHERE node_id=? AND name=?`).run(
     note!==undefined ? note : user.note,
     expires_at!==undefined ? expires_at : user.expires_at,
@@ -278,6 +294,9 @@ app.put('/api/nodes/:id/users/:name', (req, res) => {
     billing_period||user.billing_period||'monthly',
     billing_paid_until!==undefined ? billing_paid_until : user.billing_paid_until,
     billing_status||user.billing_status||'active',
+    max_devices!==undefined ? max_devices : user.max_devices,
+    newInterval||null,
+    next_reset_at||null,
     req.params.id, req.params.name
   );
   res.json({ ok: true });
@@ -350,20 +369,85 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// ── Helpers ───────────────────────────────────────────────
+function calcNextReset(interval) {
+  if (!interval || interval === 'never') return null;
+  const now = new Date();
+  if (interval === 'daily')   { now.setDate(now.getDate() + 1); now.setHours(0,0,0,0); }
+  if (interval === 'monthly') { now.setMonth(now.getMonth() + 1); now.setDate(1); now.setHours(0,0,0,0); }
+  if (interval === 'yearly')  { now.setFullYear(now.getFullYear() + 1); now.setMonth(0); now.setDate(1); now.setHours(0,0,0,0); }
+  return now.toISOString().replace('T',' ').slice(0,19);
+}
+
+function parseBytes(str) {
+  if (!str) return 0;
+  const m = str.match(/([\d.]+)(GB|MB|KB|B)/i);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  const u = m[2].toUpperCase();
+  if (u === 'GB') return Math.round(v * 1073741824);
+  if (u === 'MB') return Math.round(v * 1048576);
+  if (u === 'KB') return Math.round(v * 1024);
+  return Math.round(v);
+}
+
 // ── Background jobs ───────────────────────────────────────
 async function recordHistory() {
   const nodes = db.prepare('SELECT * FROM nodes').all();
   for (const node of nodes) {
     try {
-      const users = await ssh.getRemoteUsers(node);
-      for (const u of users) {
+      const remoteUsers = await ssh.getRemoteUsers(node);
+      const traffic = await ssh.getTraffic(node).catch(() => ({}));
+
+      for (const u of remoteUsers) {
+        const conns = u.connections || 0;
         db.prepare('INSERT INTO connections_history (node_id, user_name, connections) VALUES (?, ?, ?)')
-          .run(node.id, u.name, u.connections||0);
-        if ((u.connections||0) > 0) {
+          .run(node.id, u.name, conns);
+
+        if (conns > 0) {
           db.prepare("UPDATE users SET last_seen_at=datetime('now') WHERE node_id=? AND name=?")
             .run(node.id, u.name);
         }
+
+        // Device limit enforcement
+        const dbUser = db.prepare('SELECT * FROM users WHERE node_id=? AND name=?').get(node.id, u.name);
+        if (dbUser && dbUser.max_devices && conns > dbUser.max_devices) {
+          console.log(`⚠️ Device limit exceeded: ${u.name} on node ${node.id} (${conns}/${dbUser.max_devices})`);
+          try {
+            await ssh.stopRemoteUser(node, u.name);
+            db.prepare('UPDATE users SET status=? WHERE node_id=? AND name=?').run('stopped', node.id, u.name);
+            console.log(`🛑 Auto-stopped ${u.name}: exceeded device limit`);
+          } catch (e) { console.error('Failed to stop user:', e.message); }
+        }
       }
+
+      // Auto traffic reset check
+      const usersToReset = db.prepare(`
+        SELECT * FROM users WHERE node_id=? AND traffic_reset_interval IS NOT NULL
+        AND traffic_reset_interval != 'never' AND next_reset_at IS NOT NULL
+        AND next_reset_at <= datetime('now')
+      `).all(node.id);
+
+      for (const u of usersToReset) {
+        try {
+          // Accumulate total traffic before reset
+          const t = traffic[u.name];
+          if (t) {
+            const rxBytes = parseBytes(t.rx) + (u.total_traffic_rx_bytes || 0);
+            const txBytes = parseBytes(t.tx) + (u.total_traffic_tx_bytes || 0);
+            db.prepare('UPDATE users SET total_traffic_rx_bytes=?, total_traffic_tx_bytes=? WHERE id=?')
+              .run(rxBytes, txBytes, u.id);
+          }
+          // Reset traffic (restart container)
+          await ssh.stopRemoteUser(node, u.name);
+          await ssh.startRemoteUser(node, u.name);
+          const next = calcNextReset(u.traffic_reset_interval);
+          db.prepare(`UPDATE users SET traffic_reset_at=datetime('now'), traffic_rx_snap=NULL,
+            traffic_tx_snap=NULL, next_reset_at=?, status='active' WHERE id=?`).run(next, u.id);
+          console.log(`♻️ Auto-reset traffic for ${u.name} on node ${node.id}, next: ${next}`);
+        } catch (e) { console.error(`Failed to auto-reset traffic for ${u.name}:`, e.message); }
+      }
+
     } catch (_) {}
   }
   db.prepare("DELETE FROM connections_history WHERE recorded_at < datetime('now', '-24 hours')").run();

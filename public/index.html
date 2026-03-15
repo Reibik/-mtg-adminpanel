@@ -1429,9 +1429,11 @@ function AddUserModal({ nodeId, onClose, onSave }) {
 /* ── Edit User Modal ────────────────────────────────────── */
 function EditModal({ user, nodeId, onClose, onSave }) {
   const [f, setF] = useState({
-    note:user.note||'',
-    expires_at:user.expires_at?user.expires_at.replace(' ','T').slice(0,16):'',
-    traffic_limit_gb:user.traffic_limit_gb||''
+    note: user.note||'',
+    expires_at: user.expires_at ? user.expires_at.replace(' ','T').slice(0,16) : '',
+    traffic_limit_gb: user.traffic_limit_gb||'',
+    max_devices: user.max_devices||'',
+    traffic_reset_interval: user.traffic_reset_interval||'never',
   });
   const [loading, setLoading] = useState(false);
   const set = (k,v) => setF(x=>({...x,[k]:v}));
@@ -1439,34 +1441,118 @@ function EditModal({ user, nodeId, onClose, onSave }) {
   const submit = async () => {
     setLoading(true);
     try {
-      await api('PUT',`/api/nodes/${nodeId}/users/${user.name}`,{
-        note:f.note, expires_at:f.expires_at||null,
-        traffic_limit_gb:f.traffic_limit_gb?parseFloat(f.traffic_limit_gb):null
+      await api('PUT', `/api/nodes/${nodeId}/users/${user.name}`, {
+        note: f.note,
+        expires_at: f.expires_at||null,
+        traffic_limit_gb: f.traffic_limit_gb ? parseFloat(f.traffic_limit_gb) : null,
+        max_devices: f.max_devices ? parseInt(f.max_devices) : null,
+        traffic_reset_interval: f.traffic_reset_interval !== 'never' ? f.traffic_reset_interval : null,
       });
       toast('Сохранено','success'); onSave();
     } catch(e){toast(e.message,'error');}
     finally{setLoading(false);}
   };
 
+  const fmtBytes = (b) => {
+    if(!b) return '0';
+    if(b >= 1073741824) return (b/1073741824).toFixed(2)+'GB';
+    if(b >= 1048576) return (b/1048576).toFixed(2)+'MB';
+    if(b >= 1024) return (b/1024).toFixed(2)+'KB';
+    return b+'B';
+  };
+  const totalRx = fmtBytes(user.total_traffic_rx_bytes);
+  const totalTx = fmtBytes(user.total_traffic_tx_bytes);
+
+  const INTERVALS = [
+    {v:'never', label:'Не сбрасывать'},
+    {v:'daily',   label:'Каждый день'},
+    {v:'monthly', label:'Каждый месяц'},
+    {v:'yearly',  label:'Каждый год'},
+  ];
+
   return (
     <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:420}}>
+      <div className="modal" style={{maxWidth:460}}>
         <div className="modal-head">
-          <div className="modal-title"><I.Edit/> {user.name}</div>
+          <div className="modal-title"><I.Edit/> Настройки — {user.name}</div>
           <button className="modal-close" onClick={onClose}><I.X/></button>
         </div>
         <div className="modal-body">
-          <div className="form-group"><label className="form-label">Заметка</label>
+
+          {/* Basic */}
+          <div className="form-group">
+            <label className="form-label">Заметка</label>
             <input className="form-input" placeholder="Иван, оплатил до 01.04" value={f.note} onChange={e=>set('note',e.target.value)} autoFocus/>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-            <div className="form-group"><label className="form-label">Истекает</label>
+            <div className="form-group">
+              <label className="form-label">Истекает</label>
               <input className="form-input" type="datetime-local" value={f.expires_at} onChange={e=>set('expires_at',e.target.value)}/>
             </div>
-            <div className="form-group"><label className="form-label">Лимит (ГБ)</label>
+            <div className="form-group">
+              <label className="form-label">Лимит трафика (ГБ)</label>
               <input className="form-input" type="number" placeholder="∞" min="0" step="0.1" value={f.traffic_limit_gb} onChange={e=>set('traffic_limit_gb',e.target.value)}/>
             </div>
           </div>
+
+          {/* Device limit */}
+          <div style={{borderTop:'1px solid var(--b1)',paddingTop:14,marginTop:4}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+              <I.Wifi/> Ограничения устройств
+            </div>
+            <div className="form-group">
+              <label className="form-label">Макс. одновременных устройств</label>
+              <input className="form-input" type="number" placeholder="∞ (без ограничений)"
+                min="1" step="1" value={f.max_devices}
+                onChange={e=>set('max_devices',e.target.value)}/>
+              <div style={{fontSize:11,color:'var(--t3)',marginTop:5}}>
+                При превышении прокси автоматически остановится
+              </div>
+            </div>
+          </div>
+
+          {/* Auto traffic reset */}
+          <div style={{borderTop:'1px solid var(--b1)',paddingTop:14,marginTop:4}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+              <I.RefreshCw/> Автосброс трафика
+            </div>
+            <div className="form-group">
+              <label className="form-label">Интервал сброса</label>
+              <div className="radio-group" style={{flexWrap:'wrap'}}>
+                {INTERVALS.map(i => (
+                  <div key={i.v} className={`radio-btn ${f.traffic_reset_interval===i.v?'on':''}`}
+                    onClick={()=>set('traffic_reset_interval',i.v)}>
+                    {i.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {user.next_reset_at && (
+              <div style={{fontSize:11,color:'var(--t3)',marginTop:4}}>
+                Следующий сброс: <span style={{color:'var(--t2)'}}>{new Date(user.next_reset_at).toLocaleString('ru-RU')}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Total traffic stats */}
+          {(user.total_traffic_rx_bytes > 0 || user.total_traffic_tx_bytes > 0) && (
+            <div style={{borderTop:'1px solid var(--b1)',paddingTop:14,marginTop:4}}>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
+                <I.Activity/> Накопленный трафик
+              </div>
+              <div style={{display:'flex',gap:16}}>
+                <div style={{background:'var(--bg3)',borderRadius:8,padding:'8px 14px',flex:1,textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'var(--t3)',marginBottom:3}}>Получено</div>
+                  <div style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--cy)'}}>{totalRx}</div>
+                </div>
+                <div style={{background:'var(--bg3)',borderRadius:8,padding:'8px 14px',flex:1,textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'var(--t3)',marginBottom:3}}>Отправлено</div>
+                  <div style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--gr)'}}>{totalTx}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>Отмена</button>
@@ -1480,98 +1566,6 @@ function EditModal({ user, nodeId, onClose, onSave }) {
 }
 
 /* ── Chart ──────────────────────────────────────────────── */
-function Chart({ nodeId, userName }) {
-  const ref = useRef(null);
-  const inst = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [empty, setEmpty] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const build = (data) => {
-      if(cancelled || !ref.current) return;
-      if(inst.current) { inst.current.destroy(); inst.current = null; }
-      if(!data.length) { setEmpty(true); setLoading(false); return; }
-      setEmpty(false);
-      setLoading(false);
-      const labels = data.map(d => {
-        const t = new Date(d.recorded_at.replace(' ','T'));
-        return `${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}`;
-      });
-      inst.current = new window.Chart(ref.current, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: 'Подключений',
-            data: data.map(d => d.connections),
-            borderColor: '#7c6ff7',
-            backgroundColor: 'rgba(124,111,247,0.12)',
-            tension: 0.4,
-            fill: true,
-            pointRadius: 2,
-            pointBackgroundColor: '#38bdf8',
-            borderWidth: 2,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-          scales: {
-            x: {
-              ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 10, family: 'Geist Mono,monospace' } },
-              grid: { color: 'rgba(255,255,255,0.04)' }
-            },
-            y: {
-              ticks: { color: '#6b7280', font: { size: 10, family: 'Geist Mono,monospace' } },
-              grid: { color: 'rgba(255,255,255,0.04)' },
-              beginAtZero: true,
-              precision: 0,
-              min: 0
-            }
-          }
-        }
-      });
-    };
-
-    api('GET', `/api/nodes/${nodeId}/users/${userName}/history`)
-      .then(data => {
-        if(cancelled) return;
-        // Wait for Chart.js to load (loaded with defer)
-        const waitForChart = (retries=20) => {
-          if(window.Chart) { build(data); return; }
-          if(retries <= 0) { setLoading(false); setEmpty(true); return; }
-          setTimeout(() => waitForChart(retries-1), 100);
-        };
-        waitForChart();
-      })
-      .catch(() => { if(!cancelled) { setLoading(false); setEmpty(true); } });
-
-    return () => {
-      cancelled = true;
-      if(inst.current) { inst.current.destroy(); inst.current = null; }
-    };
-  }, [nodeId, userName]);
-
-  return (
-    <div style={{height:180,position:'relative',padding:'4px 0'}}>
-      {loading && (
-        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',gap:8,fontSize:12}}>
-          <span className="spin"/>Загружаю...
-        </div>
-      )}
-      {empty && !loading && (
-        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>
-          Нет данных (история собирается каждые 5 минут)
-        </div>
-      )}
-      <canvas ref={ref} style={{display:(loading||empty)?'none':'block'}}/>
-    </div>
-  );
-}
-
 /* ── Users Page ─────────────────────────────────────────── */
 function UsersPage({ node, onBack }) {
   const [users, setUsers] = useState([]);
@@ -1580,7 +1574,6 @@ function UsersPage({ node, onBack }) {
   const [modal, setModal] = useState(false);
   const [busy, setBusy] = useState({});
   const [editU, setEditU] = useState(null);
-  const [chartU, setChartU] = useState(null);
   const [qrU, setQrU] = useState(null);
   const [traffic, setTraffic] = useState({});
 
@@ -1663,16 +1656,6 @@ function UsersPage({ node, onBack }) {
         </div>
       </div>
 
-      {chartU && (
-        <div className="card" style={{marginBottom:16}}>
-          <div className="card-header">
-            <div className="card-title"><I.TrendUp/> График подключений — {chartU}</div>
-            <button className="btn btn-ghost btn-sm btn-icon" onClick={()=>setChartU(null)}><I.X/></button>
-          </div>
-          <Chart nodeId={node.id} userName={chartU}/>
-        </div>
-      )}
-
       <div className="card">
         {loading ? <div className="loading-center"><span className="spin"/> Загружаю юзеров...</div> : (
           <div className="table-wrap">
@@ -1681,7 +1664,7 @@ function UsersPage({ node, onBack }) {
                 <th>Клиент</th>
                 <th>Порт</th>
                 <th>Онлайн</th>
-                <th>Подкл.</th>
+                <th>Устройств</th>
                 <th>Трафик</th>
                 <th>Статус</th>
                 <th>Срок / Лимит</th>
@@ -1693,6 +1676,8 @@ function UsersPage({ node, onBack }) {
                   const traf = u.running
                     ? traffic[u.name]
                     : (u.traffic_rx_snap ? {rx:u.traffic_rx_snap, tx:u.traffic_tx_snap} : traffic[u.name]);
+                  const devLimit = u.max_devices;
+                  const devOver = devLimit && u.connections > devLimit;
                   return (
                   <tr key={u.id} style={{opacity:u.expired ? 0.5 : 1}}>
                     <td><span style={{fontFamily:'var(--mono)',fontWeight:600,fontSize:14}}>{u.name}</span></td>
@@ -1703,9 +1688,10 @@ function UsersPage({ node, onBack }) {
                         : <span style={{color:'var(--t3)',fontSize:12}}>—</span>}
                     </td>
                     <td>
-                      <span style={{fontFamily:'var(--mono)',color:'var(--vi)',cursor:'pointer',fontWeight:500,fontSize:14}}
-                        onClick={()=>setChartU(chartU===u.name?null:u.name)} title="Показать график">
-                        {u.connections}
+                      <span style={{fontFamily:'var(--mono)',fontWeight:500,fontSize:14,
+                        color: devOver ? 'var(--re)' : u.connections > 0 ? 'var(--vi)' : 'var(--t3)'}}
+                        title={devLimit ? `Лимит: ${devLimit} устройств` : 'Без ограничений'}>
+                        {u.connections}{devLimit ? `/${devLimit}` : ''}
                       </span>
                     </td>
                     <td>
@@ -1728,7 +1714,11 @@ function UsersPage({ node, onBack }) {
                         {u.expires_at && <div>{expiry(u.expires_at)}</div>}
                         {u.traffic_limit_gb && <span style={{fontSize:11,color:'var(--t3)',fontFamily:'var(--mono)'}}>{u.traffic_limit_gb}GB</span>}
                         {!u.expires_at && !u.traffic_limit_gb && <span style={{color:'var(--t3)',fontSize:12}}>∞</span>}
-                        {u.traffic_reset_at && <span style={{fontSize:10,color:'var(--t3)'}} title={`Сброс: ${new Date(u.traffic_reset_at).toLocaleString('ru-RU')}`}>↺ сброшен</span>}
+                        {u.traffic_reset_interval && u.traffic_reset_interval !== 'never' && (
+                          <span style={{fontSize:10,color:'var(--vi)'}} title={u.next_reset_at ? `Следующий: ${new Date(u.next_reset_at).toLocaleString('ru-RU')}` : ''}>
+                            ↺ {u.traffic_reset_interval === 'daily' ? 'день' : u.traffic_reset_interval === 'monthly' ? 'мес' : 'год'}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:13,color:'var(--t2)'}} title={u.note}>
