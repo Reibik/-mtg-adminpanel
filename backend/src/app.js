@@ -165,8 +165,9 @@ app.post('/api/nodes/:id/update-agent', async (req, res) => {
   const cmd = `bash <(curl -fsSL https://raw.githubusercontent.com/MaksimTMB/mtg-adminpanel/dev/mtg-agent/install-agent.sh) ${token}`;
   try {
     const r = await ssh.sshExec(node, cmd);
-    const ok = r.output.includes('health OK') || r.output.includes('installed/updated');
-    res.json({ ok, output: r.output.slice(-500) }); // last 500 chars of output
+    // Success if script ran without fatal error
+    const ok = !r.output.includes('error') && !r.output.includes('Error') && r.output.includes('Done');
+    res.json({ ok: ok || r.code === 0, output: r.output.slice(-800) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -209,12 +210,14 @@ app.get('/api/status', async (req, res) => {
   const results = await Promise.allSettled(
     nodes.map(async node => {
       const status = await ssh.getNodeStatus(node);
-      // Get online users count (connections > 0) - use agent if available
+      // online_users only via agent (fast) — skip SSH nodes to avoid slowdown
       let online_users = 0;
-      try {
-        const remoteUsers = await ssh.getRemoteUsers(node);
-        online_users = remoteUsers.filter(u => (u.connections || 0) > 0).length;
-      } catch (_) {}
+      if (node.agent_port) {
+        try {
+          const remoteUsers = await ssh.getRemoteUsers(node);
+          online_users = remoteUsers.filter(u => (u.connections || 0) > 0).length;
+        } catch (_) {}
+      }
       return { id: node.id, name: node.name, host: node.host, ...status, online_users };
     })
   );

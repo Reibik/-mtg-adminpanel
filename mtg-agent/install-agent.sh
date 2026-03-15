@@ -19,7 +19,5 @@ echo "AGENT_TOKEN=${TOKEN}" > .env
 docker compose down 2>/dev/null || true
 docker compose up -d
 
-echo ""
-echo "==> Done. Waiting for agent..."
-sleep 8
-curl -s -H "x-agent-token: ${TOKEN}" http://localhost:8081/health && echo " <- health OK" || echo "WARNING: agent not responding yet, check: docker logs mtg-agent"
+echo "==> Done. Agent starting in background (pip install may take ~30s)"
+echo "==> Check status: curl -s -H 'x-agent-token: ${TOKEN}' http://localhost:8081/health"
