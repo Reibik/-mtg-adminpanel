@@ -162,12 +162,21 @@ app.post('/api/nodes/:id/update-agent', async (req, res) => {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
   if (!node) return res.status(404).json({ error: 'Not found' });
   const token = process.env.AGENT_TOKEN || 'mtg-agent-secret';
-  const cmd = `curl -fsSL https://raw.githubusercontent.com/MaksimTMB/mtg-adminpanel/dev/mtg-agent/install-agent.sh -o /tmp/mtg-install.sh && bash /tmp/mtg-install.sh ${token}`;
+  // Use wget (more universally available than curl), write to temp file
+  const RAW = 'https://raw.githubusercontent.com/MaksimTMB/mtg-adminpanel/dev/mtg-agent';
+  const cmd = [
+    `mkdir -p /opt/mtg-agent && cd /opt/mtg-agent`,
+    `wget -q "${RAW}/main.py" -O main.py`,
+    `wget -q "${RAW}/docker-compose.yml" -O docker-compose.yml`,
+    `echo "AGENT_TOKEN=${token}" > .env`,
+    `docker compose down 2>/dev/null || true`,
+    `docker compose up -d`,
+    `echo "==> Done"`
+  ].join(' && ');
   try {
     const r = await ssh.sshExec(node, cmd);
-    // Success if script ran without fatal error
-    const ok = !r.output.includes('error') && !r.output.includes('Error') && r.output.includes('Done');
-    res.json({ ok: ok || r.code === 0, output: r.output.slice(-800) });
+    const ok = r.output.includes('Done');
+    res.json({ ok, output: r.output.slice(-800) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
