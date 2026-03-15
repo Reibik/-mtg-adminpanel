@@ -1,11 +1,15 @@
 services:
   mtg-agent:
-    build: .
+    image: python:3.12-alpine
     container_name: mtg-agent
     restart: unless-stopped
-    ports:
-      - "8081:8081"          # доступен с панельного сервера
+    network_mode: host          # видит все соединения хоста напрямую
+    ports: []                   # не нужны при host mode — порт 8081 и так доступен
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # читаем docker без прав root
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/proc:ro          # читаем /proc/net/tcp хоста
+      - ./main.py:/app/main.py:ro
+    working_dir: /app
     environment:
       - AGENT_TOKEN=${AGENT_TOKEN:-mtg-agent-secret}
+    command: sh -c "pip install --quiet fastapi uvicorn docker && uvicorn main:app --host 0.0.0.0 --port 8081"

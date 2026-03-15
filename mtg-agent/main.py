@@ -28,12 +28,12 @@ def get_mtg_containers():
 def get_connections(container) -> int:
     """
     Считать активные соединения к контейнеру.
-    Контейнер в bridge network — получаем его внутренний IP,
-    затем считаем соединения на хосте к этому IP:3128.
+    Агент запущен с network_mode: host — видит все соединения хоста.
+    Фильтруем по внутреннему IP контейнера в bridge сети.
     """
     try:
-        # Получаем внутренний IP контейнера
         container.reload()
+        # Получаем внутренний IP контейнера в bridge сети
         networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
         container_ip = None
         for net in networks.values():
@@ -45,16 +45,31 @@ def get_connections(container) -> int:
         if not container_ip:
             return 0
 
-        # Запускаем ss на хосте (через host network) и фильтруем по IP контейнера
-        result = client.containers.run(
-            "alpine",
-            f"sh -c 'apk add -q iproute2 2>/dev/null; ss -tn dst {container_ip}:3128 | grep -v Netid | wc -l'",
-            remove=True,
-            network_mode="host",
-            stdout=True,
-            stderr=False,
-        )
-        return max(0, int(result.decode().strip()) - 1)  # -1 за строку заголовка
+        # Читаем /proc/net/tcp и /proc/net/tcp6 с хоста (агент в host network)
+        # IP контейнера в little-endian hex: 172.18.0.x
+        import socket, struct
+        # Convert IP to little-endian hex as in /proc/net/tcp
+        packed = socket.inet_aton(container_ip)
+        le_hex = struct.pack('<I', struct.unpack('>I', packed)[0]).hex().upper()
+
+        count = 0
+        for fname in ['/proc/net/tcp', '/proc/net/tcp6']:
+            try:
+                with open(fname) as f:
+                    for line in f.readlines()[1:]:  # skip header
+                        parts = line.split()
+                        if len(parts) < 4:
+                            continue
+                        state = parts[3]
+                        remote_addr = parts[2]  # remote address:port
+                        local_addr = parts[1]   # local address:port
+                        # ESTABLISHED=01, SYN_RECV=02
+                        if state in ('01', '02') and le_hex in local_addr:
+                            count += 1
+            except Exception:
+                continue
+
+        return count
     except Exception:
         return 0
 
