@@ -27,25 +27,33 @@ def get_mtg_containers():
 
 def get_connections(container) -> int:
     """
-    Считать ESTABLISHED соединения к контейнеру.
-    Читаем /proc/net/tcp6 из namespace контейнера через docker exec.
-    Соединения к MTG идут по IPv4-mapped IPv6: ::ffff:container_ip:3128
+    MTG образ на scratch — нет shell/cat внутри контейнера.
+    Используем nsenter для входа в network namespace контейнера
+    и читаем /proc/net/tcp6 напрямую с хоста.
     """
     try:
-        # Читаем tcp6 из namespace контейнера — там видны все клиентские соединения
-        result = container.exec_run("cat /proc/net/tcp6", demux=False)
-        if result.exit_code != 0:
-            # fallback to tcp
-            result = container.exec_run("cat /proc/net/tcp", demux=False)
-            if result.exit_code != 0:
-                return 0
+        container.reload()
+        pid = container.attrs.get("State", {}).get("Pid", 0)
+        if not pid:
+            return 0
 
-        output = result.output.decode("utf-8", errors="ignore")
+        # Читаем tcp6 из network namespace контейнера через nsenter
+        # Агент запущен с network_mode: host и имеет доступ к /proc хоста
+        tcp6_path = f"/proc/{pid}/net/tcp6"
+        tcp_path  = f"/proc/{pid}/net/tcp"
+
         count = 0
-        for line in output.strip().split("\n")[1:]:  # skip header
-            parts = line.split()
-            if len(parts) >= 4 and parts[3] == "01":  # ESTABLISHED
-                count += 1
+        for fpath in [tcp6_path, tcp_path]:
+            try:
+                with open(fpath) as f:
+                    lines = f.readlines()[1:]  # skip header
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 4 and parts[3] == "01":  # ESTABLISHED
+                        count += 1
+            except Exception:
+                continue
+
         return count
     except Exception:
         return 0
