@@ -741,7 +741,7 @@ const COUNTRIES = [
   {code:'sg',name:'Сингапур'},{code:'au',name:'Австралия'},{code:'ca',name:'Канада'},
   {code:'kz',name:'Казахстан'},{code:'am',name:'Армения'},{code:'ge',name:'Грузия'},
 ];
-const flagUrl = (code) => code ? `https://flagcdn.com/20x15/${code}.png` : null;
+const flagUrl = (code, size='w40') => code ? `https://flagcdn.com/${size}/${code}.png` : null;
 
 /* ── Shared UI components ───────────────────────────────── */
 function expiryBadge(expires_at, small) {
@@ -784,7 +784,7 @@ function FlagPicker({ value, onChange }) {
         onClick={()=>setOpen(!open)}>
         {current ? (
           <>
-            <img src={flagUrl(current.code)} alt={current.code} style={{width:20,height:15,objectFit:'cover',borderRadius:2}}/>
+            <img src={flagUrl(current.code,'w40')} alt={current.code} style={{width:24,height:18,objectFit:'cover',borderRadius:2}}/>
             <span style={{fontSize:13,color:'var(--t1)'}}>{current.name}</span>
           </>
         ) : (
@@ -804,7 +804,7 @@ function FlagPicker({ value, onChange }) {
               <div key={c.code}
                 style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'6px 4px',borderRadius:7,cursor:'pointer',border:`1px solid ${value===c.code?'rgba(124,111,247,.4)':'transparent'}`,background:value===c.code?'rgba(124,111,247,.1)':'transparent',transition:'all .15s'}}
                 onClick={()=>{onChange(c.code);setOpen(false);}}>
-                <img src={flagUrl(c.code)} alt={c.code} style={{width:20,height:15,objectFit:'cover',borderRadius:2}}/>
+                <img src={flagUrl(c.code,'w40')} alt={c.code} style={{width:24,height:18,objectFit:'cover',borderRadius:2}}/>
                 <span style={{fontSize:9,color:'var(--t3)',textAlign:'center',lineHeight:1.2}}>{c.name}</span>
               </div>
             ))}
@@ -1036,6 +1036,7 @@ function Dashboard({ nodes, onSelectNode, onManageNode }) {
   const onlineNodes   = useMemo(() => status.filter(s=>s.online).length, [status]);
   const activeProxies = useMemo(() => status.reduce((a,s)=>a+(s.containers||0),0), [status]);
   const stoppedProxies = totalUsers - activeProxies;
+  const totalOnline   = useMemo(() => status.reduce((a,s)=>a+(s.online_users||0),0), [status]);
 
   return (
     <div className="pg">
@@ -1065,6 +1066,7 @@ function Dashboard({ nodes, onSelectNode, onManageNode }) {
           <div style={{fontSize:42,fontWeight:800,letterSpacing:'-1.5px',color:'var(--t1)',lineHeight:1,marginBottom:14}}>{totalUsers}</div>
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             <StatPill count={activeProxies} label="активных" color="34,197,94" dot="dot-live"/>
+            {totalOnline > 0 && <StatPill count={totalOnline} label="онлайн" color="56,189,248" dot="dot-live"/>}
             {stoppedProxies > 0 && <StatPill count={stoppedProxies} label="остановлен" color="251,113,133" dot=""/>}
           </div>
         </div>
@@ -1091,7 +1093,7 @@ function Dashboard({ nodes, onSelectNode, onManageNode }) {
                   <div style={{padding:'18px 20px 14px',borderBottom:'1px solid var(--b1)',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:5}}>
-                        {node.flag && <img src={flagUrl(node.flag)} alt={node.flag} style={{width:28,height:21,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)',flexShrink:0}}/>}
+                        {node.flag && <img src={flagUrl(node.flag,'w80')} alt={node.flag} style={{width:32,height:24,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)',flexShrink:0}}/>}
                         <span style={{fontSize:18,fontWeight:700,letterSpacing:'-0.3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                           {node.name}
                         </span>
@@ -1103,10 +1105,11 @@ function Dashboard({ nodes, onSelectNode, onManageNode }) {
                     </span>
                   </div>
 
-                  {/* 4 stat pills */}
+                  {/* stat pills */}
                   <div style={{padding:'12px 20px',display:'flex',gap:8,flexWrap:'wrap',borderBottom:'1px solid var(--b1)'}}>
-                    <StatPill count={total}   label="всего"     color="124,111,247" dot={null}/>
-                    <StatPill count={active}  label="активных"  color="34,197,94"  dot="dot-live"/>
+                    <StatPill count={total}   label="всего"      color="124,111,247" dot={null}/>
+                    <StatPill count={active}  label="активных"   color="34,197,94"  dot="dot-live"/>
+                    {s.online_users > 0 && <StatPill count={s.online_users} label="онлайн" color="56,189,248" dot="dot-live"/>}
                     {stopped > 0 && <StatPill count={stopped} label="остановлен" color="251,113,133" dot=""/>}
                   </div>
 
@@ -1321,7 +1324,7 @@ function NodesPage({ nodes, onReload, onManage, onOpenNode }) {
                   <div style={{padding:'18px 20px 14px',borderBottom:'1px solid var(--b1)',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:5}}>
-                        {node.flag && <img src={flagUrl(node.flag)} alt={node.flag} style={{width:26,height:19,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)',flexShrink:0}}/>}
+                        {node.flag && <img src={flagUrl(node.flag,'w80')} alt={node.flag} style={{width:32,height:24,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)',flexShrink:0}}/>}
                         <span style={{fontSize:17,fontWeight:700,letterSpacing:'-0.3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{node.name}</span>
                         {node.agent_port && <span className="badge badge-purple" style={{fontSize:10,padding:'2px 6px'}}>Agent</span>}
                       </div>
@@ -1334,6 +1337,7 @@ function NodesPage({ nodes, onReload, onManage, onOpenNode }) {
                   <div style={{padding:'11px 20px',display:'flex',gap:8,flexWrap:'wrap',borderBottom:'1px solid var(--b1)'}}>
                     <StatPill count={total}  label="всего"      color="124,111,247" dot={null}/>
                     <StatPill count={active} label="активных"   color="34,197,94"  dot="dot-live"/>
+                    {s.online_users > 0 && <StatPill count={s.online_users} label="онлайн" color="56,189,248" dot="dot-live"/>}
                     {stopped > 0 && <StatPill count={stopped} label="остановлен" color="251,113,133" dot=""/>}
                   </div>
                   <div style={{padding:'11px 20px',display:'flex',gap:8,alignItems:'center'}}>
@@ -1397,7 +1401,7 @@ function NodePage({ node, onBack, onManage, onReload }) {
         <div className="topbar-left" style={{display:'flex',alignItems:'center',gap:14}}>
           <button className="btn btn-ghost btn-sm" onClick={onBack}><I.ArrowLeft/> Назад</button>
           <div style={{display:'flex',alignItems:'center',gap:10}}>
-            {node.flag && <img src={flagUrl(node.flag)} alt={node.flag} style={{width:28,height:21,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>}
+            {node.flag && <img src={flagUrl(node.flag,'w80')} alt={node.flag} style={{width:32,height:24,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>}
             <div>
               <div className="page-title" style={{marginBottom:0}}><em>{node.name}</em></div>
               <div style={{fontSize:12,color:'var(--t3)',fontFamily:'var(--mono)'}}>{node.host}</div>
@@ -1788,9 +1792,12 @@ function UsersPage({ node, onBack }) {
       <div className="topbar">
         <div className="topbar-left" style={{display:'flex',alignItems:'center',gap:14}}>
           <button className="btn btn-ghost btn-sm" onClick={onBack}><I.ArrowLeft/> Назад</button>
-          <div>
-            <div className="page-title"><em>{node.name}</em></div>
-            <div className="page-desc">{node.host}</div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            {node.flag && <img src={flagUrl(node.flag,'w80')} alt={node.flag} style={{width:30,height:22,objectFit:'cover',borderRadius:3,boxShadow:'0 1px 4px rgba(0,0,0,.3)',flexShrink:0}}/>}
+            <div>
+              <div className="page-title" style={{marginBottom:0}}><em>{node.name}</em></div>
+              <div className="page-desc" style={{marginTop:0}}>{node.host}</div>
+            </div>
           </div>
         </div>
         <div className="topbar-right">

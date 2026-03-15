@@ -192,11 +192,20 @@ app.post('/api/nodes/:id/mtg-update', async (req, res) => {
 app.get('/api/status', async (req, res) => {
   const nodes = db.prepare('SELECT * FROM nodes').all();
   const results = await Promise.allSettled(
-    nodes.map(async node => ({ id: node.id, name: node.name, host: node.host, ...await ssh.getNodeStatus(node) }))
+    nodes.map(async node => {
+      const status = await ssh.getNodeStatus(node);
+      // Get online users count (connections > 0) - use agent if available
+      let online_users = 0;
+      try {
+        const remoteUsers = await ssh.getRemoteUsers(node);
+        online_users = remoteUsers.filter(u => (u.connections || 0) > 0).length;
+      } catch (_) {}
+      return { id: node.id, name: node.name, host: node.host, ...status, online_users };
+    })
   );
   res.json(results.map((r, i) => r.status === 'fulfilled'
     ? r.value
-    : { id: nodes[i].id, name: nodes[i].name, online: false }
+    : { id: nodes[i].id, name: nodes[i].name, online: false, online_users: 0 }
   ));
 });
 
