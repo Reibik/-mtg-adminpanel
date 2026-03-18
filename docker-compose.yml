@@ -8,6 +8,8 @@ services:
     volumes:
       - ./data:/data
       - ./ssh_keys:/ssh_keys:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
     environment:
       - PORT=3000
       - DATA_DIR=/data

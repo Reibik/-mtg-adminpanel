@@ -944,6 +944,8 @@ function VersionBlock({ nodes, panelVersion }) {
   const [open, setOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [selfUpdating, setSelfUpdating] = useState(false);
+  const [selfUpdateStatus, setSelfUpdateStatus] = useState(null);
 
   const checkVersions = useCallback(async () => {
     if(!nodes.length) return;
@@ -997,6 +999,49 @@ function VersionBlock({ nodes, panelVersion }) {
 
   const updateAllNodes = async () => {
     for(const n of nodes) await updateNode(n);
+  };
+
+  const selfUpdate = async () => {
+    setSelfUpdating(true);
+    setSelfUpdateStatus(null);
+    try {
+      const r = await api('POST', '/api/self-update');
+      if (r.status === 'up-to-date') {
+        setSelfUpdateStatus({ type: 'info', text: r.message });
+        toast(r.message, 'info');
+      } else if (r.status === 'updating') {
+        setSelfUpdateStatus({ type: 'success', text: 'Обновление запущено. Панель перезапустится через ~30 сек...' });
+        toast('Обновление запущено — панель перезапустится', 'success');
+        // Poll until panel comes back
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const resp = await fetch('/api/version');
+            if (resp.ok) {
+              const data = await resp.json();
+              clearInterval(poll);
+              setSelfUpdateStatus({ type: 'success', text: `Панель обновлена до v${data.version}!` });
+              toast(`Обновлено до v${data.version}!`, 'success');
+              setSelfUpdating(false);
+              // Reload page to pick up new frontend
+              setTimeout(() => window.location.reload(), 1500);
+            }
+          } catch {
+            // Panel not ready yet
+            if (attempts > 60) {
+              clearInterval(poll);
+              setSelfUpdateStatus({ type: 'error', text: 'Панель не ответила после обновления. Проверьте docker logs.' });
+              setSelfUpdating(false);
+            }
+          }
+        }, 3000);
+      }
+    } catch(e) {
+      setSelfUpdateStatus({ type: 'error', text: e.message || 'Ошибка обновления' });
+      toast(e.message || 'Ошибка обновления', 'error');
+      setSelfUpdating(false);
+    }
   };
 
   if(!nodes.length) return null;
@@ -1055,10 +1100,15 @@ function VersionBlock({ nodes, panelVersion }) {
                     </div>
                   </div>
                   <div style={{display:'flex',gap:8,flexShrink:0}}>
-                    {updateInfo?.panel?.hasUpdate && updateInfo.panel.releaseUrl && (
-                      <a href={updateInfo.panel.releaseUrl} target="_blank" className="btn btn-primary btn-sm" style={{textDecoration:'none'}}>
-                        <I.Download/> {updateInfo.panel.latest}
-                      </a>
+                    {updateInfo?.panel?.hasUpdate && (
+                      <button className="btn btn-primary btn-sm" onClick={selfUpdate}
+                        disabled={selfUpdating}
+                        title="Обновить панель автоматически">
+                        {selfUpdating
+                          ? <><span className="spin spin-sm"/> Обновляю...</>
+                          : <><I.Download/> Обновить до {updateInfo.panel.latest}</>
+                        }
+                      </button>
                     )}
                     <a href="https://github.com/Reibik/-mtg-adminpanel/releases" target="_blank"
                       className="btn btn-ghost btn-sm" style={{textDecoration:'none'}}>
@@ -1069,6 +1119,16 @@ function VersionBlock({ nodes, panelVersion }) {
                 {updateInfo?.panel?.hasUpdate && updateInfo.panel.releaseNotes && (
                   <div style={{marginTop:12,padding:'10px 12px',background:'var(--bg2)',borderRadius:8,fontSize:12,color:'var(--t2)',lineHeight:1.6,maxHeight:120,overflow:'auto',whiteSpace:'pre-wrap'}}>
                     {updateInfo.panel.releaseNotes}
+                  </div>
+                )}
+                {selfUpdateStatus && (
+                  <div style={{marginTop:10,padding:'10px 12px',borderRadius:8,fontSize:12,lineHeight:1.5,
+                    background: selfUpdateStatus.type === 'error' ? 'rgba(239,68,68,0.1)' : selfUpdateStatus.type === 'success' ? 'rgba(52,211,153,0.1)' : 'rgba(124,111,247,0.1)',
+                    color: selfUpdateStatus.type === 'error' ? '#ef4444' : selfUpdateStatus.type === 'success' ? '#34d399' : '#a5b4fc',
+                    border: `1px solid ${selfUpdateStatus.type === 'error' ? 'rgba(239,68,68,0.2)' : selfUpdateStatus.type === 'success' ? 'rgba(52,211,153,0.2)' : 'rgba(124,111,247,0.2)'}`,
+                  }}>
+                    {selfUpdating && <span className="spin spin-sm" style={{width:10,height:10,marginRight:8,verticalAlign:'middle'}}/>}
+                    {selfUpdateStatus.text}
                   </div>
                 )}
               </div>

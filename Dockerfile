@@ -10,6 +10,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install docker CLI and git for self-update
+RUN apk add --no-cache docker-cli docker-cli-compose git
+
 # Copy package files
 COPY backend/package.json ./
 

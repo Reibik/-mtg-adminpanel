@@ -170,6 +170,43 @@ app.use('/api', (req, res, next) => {
 // ── Admin extra routes (plans, changelog, customers) ──────
 app.use('/api', adminExtraRoutes);
 
+// ── Self-update (admin only) ──────────────────────────────
+const { execFile } = require('child_process');
+const fs = require('fs');
+
+app.post('/api/self-update', (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin может обновлять панель' });
+
+  // Check that /repo exists (mounted project dir)
+  if (!fs.existsSync('/repo/.git')) {
+    return res.status(500).json({ error: 'Директория проекта не примонтирована. Проверьте docker-compose.yml' });
+  }
+
+  // Step 1: git pull
+  execFile('git', ['-C', '/repo', 'pull', '--ff-only'], { timeout: 30000 }, (err, stdout, stderr) => {
+    if (err) {
+      return res.status(500).json({ error: 'Git pull failed', details: (stderr || err.message).slice(0, 500) });
+    }
+
+    const gitOutput = stdout.trim();
+
+    // If already up to date
+    if (gitOutput.includes('Already up to date') || gitOutput.includes('Already up-to-date')) {
+      return res.json({ status: 'up-to-date', message: 'Уже актуальная версия' });
+    }
+
+    // Step 2: Rebuild and restart in background (detached so response goes back before container dies)
+    const child = execFile('sh', ['-c', 'cd /repo && docker compose up -d --build --force-recreate 2>&1'], {
+      timeout: 0,
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+
+    res.json({ status: 'updating', message: 'Обновление запущено. Панель перезапустится через ~30 сек.', gitOutput });
+  });
+});
+
 // ── TOTP 2FA ──────────────────────────────────────────────
 const TOTP_ISSUER = 'MTG Panel';
 
