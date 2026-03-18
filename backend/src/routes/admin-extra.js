@@ -64,7 +64,16 @@ router.delete('/plans/:id', (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.get('/changelog', (req, res) => {
-  const rows = db.prepare('SELECT * FROM changelog ORDER BY released_at DESC').all();
+  const rows = db.prepare('SELECT * FROM changelog').all();
+  rows.sort((a, b) => {
+    const pa = a.version.replace(/^v/, '').split('.').map(Number);
+    const pb = b.version.replace(/^v/, '').split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = pa[i] || 0, nb = pb[i] || 0;
+      if (na !== nb) return nb - na;
+    }
+    return 0;
+  });
   res.json(rows.map(r => ({ ...r, changes: JSON.parse(r.changes) })));
 });
 

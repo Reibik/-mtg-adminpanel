@@ -570,8 +570,19 @@ router.post('/payments/:id/check', auth.authCustomer, async (req, res) => {
 // CHANGELOG
 // ═══════════════════════════════════════════════════════════
 
+function semverCmp(a, b) {
+  const pa = a.replace(/^v/, '').split('.').map(Number);
+  const pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na !== nb) return nb - na;
+  }
+  return 0;
+}
+
 router.get('/changelog', (req, res) => {
-  const rows = db.prepare('SELECT * FROM changelog ORDER BY released_at DESC').all();
+  const rows = db.prepare('SELECT * FROM changelog').all();
+  rows.sort((a, b) => semverCmp(a.version, b.version));
   res.json(rows.map(r => ({ ...r, changes: JSON.parse(r.changes) })));
 });
 
@@ -580,8 +591,9 @@ router.get('/changelog/unseen', auth.authCustomer, (req, res) => {
     SELECT c.* FROM changelog c
     WHERE c.version NOT IN (
       SELECT version FROM customer_changelog_seen WHERE customer_id = ?
-    ) ORDER BY c.released_at DESC
+    )
   `).all(req.customer.id);
+  rows.sort((a, b) => semverCmp(a.version, b.version));
   res.json(rows.map(r => ({ ...r, changes: JSON.parse(r.changes) })));
 });
 
