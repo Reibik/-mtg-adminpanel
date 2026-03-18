@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MTG AdminPanel</title>
+<title>ST VILLAGE AdminPanel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
@@ -279,6 +279,17 @@ body {
 .card-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .card-title svg { width: 15px; height: 15px; color: var(--t3); }
 
+/* ─── SECTION (DB, Announcements) ───────────────────────── */
+.section-header {
+  font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--b1);
+}
+.section-header svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--primary); }
+.section-card {
+  background: var(--card); border: 1px solid var(--b1);
+  border-radius: 12px; padding: 20px;
+}
+
 .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
 
 /* ─── NODE CARD ─────────────────────────────────────────── */
@@ -315,7 +326,7 @@ body {
 .node-actions { display: flex; gap: 7px; flex-wrap: wrap; }
 
 /* ─── TABLE ─────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; }
+.tbl-wrap, .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th {
   text-align: left; padding: 11px 14px;
@@ -345,6 +356,7 @@ tbody tr:hover td { background: rgba(124,111,247,0.04); }
 .badge-amber { background: rgba(251,191,36,0.1); color: var(--am); border: 1px solid rgba(251,191,36,0.18); }
 .badge-blue  { background: rgba(56,189,248,0.1);  color: var(--cy); border: 1px solid rgba(56,189,248,0.18); }
 .badge-purple{ background: rgba(124,111,247,0.1); color: var(--vi); border: 1px solid rgba(124,111,247,0.18); }
+.badge-violet{ background: rgba(167,139,250,0.1); color: #a78bfa; border: 1px solid rgba(167,139,250,0.18); }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .dot-live { animation: dot-pulse 2.4s ease infinite; }
 @keyframes dot-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
@@ -535,16 +547,47 @@ tbody tr:hover td { background: rgba(124,111,247,0.04); }
 @media (max-width: 860px) {
   .sidebar { transform: translateX(-100%); }
   .sidebar.open { transform: translateX(0); box-shadow: 8px 0 40px rgba(0,0,0,0.5); }
-  .main { margin-left: 0; max-width: 100vw; padding: 16px 14px 80px; }
+  .main { margin-left: 0; max-width: 100vw; padding: 16px 10px 80px; overflow-x: hidden; word-break: break-word; }
   .mobile-bar { display: flex !important; }
   .stats-row { grid-template-columns: repeat(2,1fr); gap: 10px; }
   .grid-2 { grid-template-columns: 1fr; }
-  .stat-val { font-size: 26px; }
-  .modal { border-radius: 20px 20px 0 0; position: fixed; bottom: 0; left: 0; right: 0; max-width: 100%; max-height: 90vh; }
+  .stat-val { font-size: 22px; }
+  .stat-card { padding: 14px; }
+  .modal { border-radius: 20px 20px 0 0; position: fixed; bottom: 0; left: 0; right: 0; max-width: 100% !important; max-height: 90vh; margin: 0; width: 100%; }
+  .modal-body { max-height: 60vh; overflow-y: auto; }
   .overlay { align-items: flex-end; }
-  table { font-size: 12px; }
-  th, td { padding: 8px 10px; }
-  .link-box { max-width: 160px; }
+  table { font-size: 11px; display: block; overflow-x: auto; }
+  thead, tbody, tr { display: table; width: 100%; table-layout: auto; }
+  th, td { padding: 6px 8px; white-space: nowrap; }
+  .link-box { max-width: 100%; word-break: break-all; }
+  .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .topbar-right { width: 100%; flex-wrap: wrap; gap: 6px; }
+  .topbar-right .form-input { width: 100% !important; }
+  .topbar-right .btn { flex: 1; min-width: 0; justify-content: center; }
+  .page-title { font-size: 18px; word-break: break-word; }
+  .page-desc { font-size: 11px; word-break: break-word; }
+  .card { padding: 14px; overflow: hidden; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .btn { font-size: 12px; padding: 7px 12px; white-space: normal; text-align: center; word-break: break-word; }
+  .btn-sm { font-size: 11px; padding: 5px 10px; }
+  .toasts { bottom: 80px; right: 10px; left: 10px; }
+  .toast { max-width: 100%; min-width: auto; }
+  .tbl-wrap, .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .node-card { padding: 14px; }
+  .node-head { flex-wrap: wrap; gap: 8px; }
+  .node-info { min-width: 0; }
+  .node-name { font-size: 14px; word-break: break-all; }
+  .node-host { word-break: break-all; }
+  .node-stats { gap: 12px; flex-wrap: wrap; }
+  .node-stat-val { font-size: 20px; }
+  .node-actions { gap: 4px; flex-wrap: wrap; }
+  .node-actions .btn { flex: 1; min-width: 60px; justify-content: center; }
+  .section-header { font-size: 14px; flex-wrap: wrap; }
+  .section-card { padding: 14px; overflow: hidden; }
+  .form-input, .form-select, textarea { max-width: 100% !important; width: 100% !important; box-sizing: border-box; }
+  .form-row { flex-direction: column; gap: 8px; }
+  .ver-table td, .ver-table th { font-size: 10px; padding: 4px 6px; }
+  * { -webkit-tap-highlight-color: transparent; }
 }
 
 .mobile-bar {
@@ -555,17 +598,20 @@ tbody tr:hover td { background: rgba(124,111,247,0.04); }
   border-top: 1px solid var(--b1);
   backdrop-filter: blur(20px);
   z-index: 200; align-items: stretch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .mob-item {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
+  align-items: center; justify-content: center; gap: 2px;
   cursor: pointer; color: var(--t3);
   transition: color var(--tx); user-select: none;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0; padding: 4px 2px;
 }
 .mob-item.active { color: var(--vi); }
-.mob-item svg { width: 20px; height: 20px; }
-.mob-label { font-size: 10px; font-weight: 500; }
+.mob-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.mob-label { font-size: 9px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-align: center; padding: 0 1px; }
+.mobile-bar { overflow-x: hidden; gap: 0; }
 </style>
 </head>
 <body>
@@ -608,11 +654,22 @@ const I = {
   Key:     () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>,
   Network: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>,
   TrendUp: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  Tag:     () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>,
+  Save:    () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+  User:    () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  CreditCard:()=><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="22" height="16" x="1" y="4" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  UserCog: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4-.9-.3"/><path d="m15.2 13.9-.9-.3"/><path d="m16.6 18.7.3-.9"/><path d="m19.1 12.2.3-.9"/><path d="m19.6 18.7-.4-.9"/><path d="m16.8 12.3-.4-.9"/><path d="m14.3 16.6.9-.3"/><path d="m20.7 13.8.9-.3"/></svg>,
+  Database:() => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>,
+  Bell:    () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
+  ToggleLeft:()=><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="12" x="2" y="6" rx="6"/><circle cx="8" cy="12" r="2"/></svg>,
+  ToggleRight:()=><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="12" x="2" y="6" rx="6"/><circle cx="16" cy="12" r="2"/></svg>,
 };
 
 /* ── Auth ───────────────────────────────────────────────── */
 const getToken = () => localStorage.getItem('mtg_token') || '';
 const setToken = (t) => localStorage.setItem('mtg_token', t);
+const getAdminRole = () => localStorage.getItem('mtg_role') || 'admin';
+const setAdminRole = (r) => localStorage.setItem('mtg_role', r || 'admin');
 const getTotpCode = () => sessionStorage.getItem('mtg_totp') || '';
 const setTotpCode = (c) => { if(c) sessionStorage.setItem('mtg_totp',c); else sessionStorage.removeItem('mtg_totp'); };
 
@@ -658,18 +715,21 @@ function Toasts({ list }) {
 /* ── Login ──────────────────────────────────────────────── */
 function Login({ onLogin }) {
   const [tok, setTok] = useState('');
-  const [step, setStep] = useState('token');
+  const [step, setStep] = useState('token'); // 'token' | 'totp' | 'user'
   const [totp, setTotp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   const submitToken = async e => {
     e.preventDefault(); if(!tok.trim()) return;
-    setLoading(true);
+    setLoading(true); setLoginError('');
     try {
       setToken(tok);
       const s = await fetch('/api/totp/status', { headers:{'x-auth-token':tok} }).then(r=>r.json());
       if(s.enabled) { setStep('totp'); }
-      else { await api('GET','/api/nodes'); toast('Вход выполнен','success'); onLogin(tok); }
+      else { await api('GET','/api/nodes'); setAdminRole('admin'); toast('Вход выполнен','success'); onLogin(tok,'admin'); }
     } catch { setToken(''); toast('Неверный токен','error'); }
     finally { setLoading(false); }
   };
@@ -677,8 +737,28 @@ function Login({ onLogin }) {
   const submitTotp = async e => {
     e.preventDefault(); if(totp.length!==6) return;
     setLoading(true);
-    try { setTotpCode(totp); await api('GET','/api/nodes'); toast('Вход выполнен','success'); onLogin(tok); }
+    try { setTotpCode(totp); await api('GET','/api/nodes'); setAdminRole('admin'); toast('Вход выполнен','success'); onLogin(tok,'admin'); }
     catch { setTotpCode(''); setTotp(''); toast('Неверный код 2FA','error'); }
+    finally { setLoading(false); }
+  };
+
+  const submitUser = async e => {
+    e.preventDefault(); setLoginError('');
+    if(!username.trim()||!password.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/login', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username, password})
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error||'Ошибка');
+      const userToken = 'user:'+username;
+      setToken(userToken);
+      setAdminRole(data.role);
+      toast(`Вход: ${data.display_name||username} (${data.role})`,'success');
+      onLogin(userToken, data.role);
+    } catch(e) { setLoginError(e.message); }
     finally { setLoading(false); }
   };
 
@@ -686,9 +766,9 @@ function Login({ onLogin }) {
     <div className="login-wrap">
       <div className="login-card">
         <div className="login-head">
-          <div className="login-icon">{step==='totp'?<I.Shield/>:<I.Zap/>}</div>
-          <div className="login-title">MTG Panel</div>
-          <div className="login-sub">{step==='totp'?'two-factor auth':'mtg proxy manager'}</div>
+          <div className="login-icon">{step==='totp'?<I.Shield/>:step==='user'?<I.Users/>:<I.Zap/>}</div>
+          <div className="login-title">ST VILLAGE Panel</div>
+          <div className="login-sub">{step==='totp'?'two-factor auth':step==='user'?'вход по логину':'proxy manager'}</div>
         </div>
         <div className="login-body">
           {step==='token' ? (
@@ -701,6 +781,33 @@ function Login({ onLogin }) {
               <button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:10}} type="submit" disabled={loading}>
                 {loading ? <span className="spin spin-sm"/> : <><I.Zap/> Войти</>}
               </button>
+              <div style={{textAlign:'center',marginTop:14}}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{fontSize:12}} onClick={()=>setStep('user')}>
+                  Войти по логину и паролю
+                </button>
+              </div>
+            </form>
+          ) : step==='user' ? (
+            <form onSubmit={submitUser}>
+              <div className="form-group">
+                <label className="form-label">Логин</label>
+                <input className="form-input" type="text" placeholder="username" value={username}
+                  onChange={e=>setUsername(e.target.value)} autoFocus />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Пароль</label>
+                <input className="form-input" type="password" placeholder="••••••" value={password}
+                  onChange={e=>setPassword(e.target.value)} />
+              </div>
+              {loginError && <div style={{color:'var(--re)',fontSize:13,marginBottom:12}}>{loginError}</div>}
+              <button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:10}} type="submit" disabled={loading}>
+                {loading ? <span className="spin spin-sm"/> : <><I.Users/> Войти</>}
+              </button>
+              <div style={{textAlign:'center',marginTop:14}}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{fontSize:12}} onClick={()=>setStep('token')}>
+                  Войти по токену
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={submitTotp}>
@@ -828,23 +935,27 @@ function parseVer(raw) {
   return { name: raw.slice(0,20), date: null };
 }
 
-const PANEL_VERSION_FALLBACK = 'v1.6.0'; // fallback if API unavailable
-
 function VersionBlock({ nodes, panelVersion }) {
   const [versions, setVersions] = useState({});
+  const [agentVersions, setAgentVersions] = useState({});
   const [updating, setUpdating] = useState({});
+  const [updatingAgent, setUpdatingAgent] = useState({});
   const [checking, setChecking] = useState(false);
   const [open, setOpen] = useState(false);
-  const [latestRelease, setLatestRelease] = useState(null);
-  const [checkingRelease, setCheckingRelease] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
 
   const checkVersions = useCallback(async () => {
     if(!nodes.length) return;
     setChecking(true);
     await Promise.allSettled(nodes.map(async n => {
       try {
-        const r = await api('GET', `/api/nodes/${n.id}/mtg-version`);
-        setVersions(v => ({...v, [n.id]: r.version || 'unknown'}));
+        const [mtg, agent] = await Promise.allSettled([
+          api('GET', `/api/nodes/${n.id}/mtg-version`),
+          n.agent_port ? api('GET', `/api/nodes/${n.id}/agent-version`) : Promise.resolve({ version: null }),
+        ]);
+        setVersions(v => ({...v, [n.id]: mtg.status === 'fulfilled' ? (mtg.value.version || 'unknown') : 'error'}));
+        if(n.agent_port) setAgentVersions(v => ({...v, [n.id]: agent.status === 'fulfilled' ? (agent.value.version || 'unknown') : 'error'}));
       } catch {
         setVersions(v => ({...v, [n.id]: 'error'}));
       }
@@ -852,18 +963,17 @@ function VersionBlock({ nodes, panelVersion }) {
     setChecking(false);
   }, [nodes]);
 
-  const checkLatestRelease = useCallback(async () => {
-    setCheckingRelease(true);
+  const checkUpdates = useCallback(async () => {
+    setCheckingUpdates(true);
     try {
-      const r = await fetch('https://api.github.com/repos/MaksimTMB/mtg-adminpanel/releases/latest');
-      const data = await r.json();
-      if(data.tag_name) setLatestRelease({ tag: data.tag_name, url: data.html_url });
+      const r = await api('GET', '/api/check-updates');
+      setUpdateInfo(r);
     } catch {}
-    finally { setCheckingRelease(false); }
+    finally { setCheckingUpdates(false); }
   }, []);
 
   useEffect(() => { if(nodes.length) checkVersions(); }, [nodes.length]);
-  useEffect(() => { if(open && !latestRelease) checkLatestRelease(); }, [open]);
+  useEffect(() => { if(open && !updateInfo) checkUpdates(); }, [open]);
 
   const updateNode = async (node) => {
     setUpdating(u => ({...u, [node.id]: true}));
@@ -875,18 +985,27 @@ function VersionBlock({ nodes, panelVersion }) {
     finally { setUpdating(u => ({...u, [node.id]: false})); }
   };
 
+  const updateAgent = async (node) => {
+    setUpdatingAgent(u => ({...u, [node.id]: true}));
+    try {
+      await api('POST', `/api/nodes/${node.id}/update-agent`);
+      toast(`${node.name}: Агент обновлён`, 'success');
+      setTimeout(checkVersions, 3000);
+    } catch(e) { toast(e.message, 'error'); }
+    finally { setUpdatingAgent(u => ({...u, [node.id]: false})); }
+  };
+
   const updateAllNodes = async () => {
     for(const n of nodes) await updateNode(n);
   };
 
   if(!nodes.length) return null;
 
-  // Derive clean sidebar label
   const vList = Object.values(versions).map(parseVer);
-  const hasData = vList.length > 0;
   const names = [...new Set(vList.map(v => v.name).filter(v => v && v !== 'error' && v !== '—'))];
   const sidebarTag = checking ? null : names.length === 1 ? names[0] : names.length > 1 ? 'разные' : null;
   const anyError = Object.values(versions).some(v => v === 'error');
+  const panelHasUpdate = updateInfo?.panel?.hasUpdate;
 
   return (
     <>
@@ -895,15 +1014,17 @@ function VersionBlock({ nodes, panelVersion }) {
         Версии
         {checking
           ? <span className="version-sidebar-tag load"><span className="spin spin-sm" style={{width:8,height:8}}/></span>
-          : sidebarTag
-            ? <span className={`version-sidebar-tag ${anyError?'warn':'ok'}`}>{sidebarTag}</span>
-            : null
+          : panelHasUpdate
+            ? <span className="version-sidebar-tag warn">обновление</span>
+            : sidebarTag
+              ? <span className={`version-sidebar-tag ${anyError?'warn':'ok'}`}>{sidebarTag}</span>
+              : null
         }
       </button>
 
       {open && (
         <div className="overlay" onClick={e=>e.target===e.currentTarget&&setOpen(false)}>
-          <div className="modal" style={{maxWidth:700}}>
+          <div className="modal" style={{maxWidth:750}}>
             <div className="modal-head">
               <div className="modal-title"><I.Activity/> Версии и обновления</div>
               <button className="modal-close" onClick={()=>setOpen(false)}><I.X/></button>
@@ -911,22 +1032,22 @@ function VersionBlock({ nodes, panelVersion }) {
 
             <div className="modal-body" style={{padding:'16px 20px'}}>
 
-              {/* Panel version row */}
-              <div style={{marginBottom:20,padding:'14px 16px',background:'var(--bg3)',borderRadius:10,border:'1px solid var(--b1)'}}>
+              {/* Panel version */}
+              <div style={{marginBottom:16,padding:'14px 16px',background:'var(--bg3)',borderRadius:10,border:'1px solid var(--b1)'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
                     <div style={{width:34,height:34,borderRadius:9,background:'var(--grad)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                       <I.Zap/>
                     </div>
                     <div>
-                      <div style={{fontWeight:600,fontSize:13}}>MTG AdminPanel</div>
+                      <div style={{fontWeight:600,fontSize:13}}>Панель управления</div>
                       <div style={{fontSize:11,color:'var(--t3)',fontFamily:'var(--mono)',marginTop:3,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
                         <span>Установлена: <span style={{color:'var(--vi)'}}>{panelVersion || '...'}</span></span>
-                        {checkingRelease
+                        {checkingUpdates
                           ? <span style={{color:'var(--t3)',display:'inline-flex',alignItems:'center',gap:4}}><span className="spin spin-sm" style={{width:9,height:9}}/> проверяю...</span>
-                          : latestRelease && panelVersion
-                            ? latestRelease.tag !== panelVersion
-                              ? <span className="badge badge-amber" style={{fontSize:10}}>↑ новая {latestRelease.tag}</span>
+                          : updateInfo?.panel
+                            ? updateInfo.panel.hasUpdate
+                              ? <span className="badge badge-amber" style={{fontSize:10}}>↑ новая {updateInfo.panel.latest}</span>
                               : <span className="badge badge-green" style={{fontSize:10}}>актуальная</span>
                             : null
                         }
@@ -934,9 +1055,9 @@ function VersionBlock({ nodes, panelVersion }) {
                     </div>
                   </div>
                   <div style={{display:'flex',gap:8,flexShrink:0}}>
-                    {latestRelease && panelVersion && latestRelease.tag !== panelVersion && (
-                      <a href={latestRelease.url} target="_blank" className="btn btn-primary btn-sm" style={{textDecoration:'none'}}>
-                        <I.Download/> {latestRelease.tag}
+                    {updateInfo?.panel?.hasUpdate && updateInfo.panel.releaseUrl && (
+                      <a href={updateInfo.panel.releaseUrl} target="_blank" className="btn btn-primary btn-sm" style={{textDecoration:'none'}}>
+                        <I.Download/> {updateInfo.panel.latest}
                       </a>
                     )}
                     <a href="https://github.com/MaksimTMB/mtg-adminpanel/releases" target="_blank"
@@ -945,26 +1066,52 @@ function VersionBlock({ nodes, panelVersion }) {
                     </a>
                   </div>
                 </div>
+                {updateInfo?.panel?.hasUpdate && updateInfo.panel.releaseNotes && (
+                  <div style={{marginTop:12,padding:'10px 12px',background:'var(--bg2)',borderRadius:8,fontSize:12,color:'var(--t2)',lineHeight:1.6,maxHeight:120,overflow:'auto',whiteSpace:'pre-wrap'}}>
+                    {updateInfo.panel.releaseNotes}
+                  </div>
+                )}
               </div>
 
-              <div style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:8}}>
-                MTG прокси на нодах
+              {/* Agent latest version info */}
+              <div style={{marginBottom:20,padding:'14px 16px',background:'var(--bg3)',borderRadius:10,border:'1px solid var(--b1)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <div style={{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#06b6d4,#3b82f6)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <I.Cpu/>
+                  </div>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:13}}>MTG Агент</div>
+                    <div style={{fontSize:11,color:'var(--t3)',fontFamily:'var(--mono)',marginTop:3}}>
+                      Последняя в репозитории: <span style={{color:'var(--vi)'}}>{updateInfo?.agent?.latest || '...'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <table className="ver-table" style={{tableLayout:'fixed',width:'100%'}}>
+
+              {/* MTG versions table */}
+              <div style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'1px',marginBottom:8}}>
+                Ноды — MTG прокси и агент
+              </div>
+              <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+              <table className="ver-table" style={{tableLayout:'fixed',width:'100%',minWidth:650}}>
                 <colgroup>
-                  <col style={{width:'20%'}}/>
-                  <col style={{width:'27%'}}/>
                   <col style={{width:'15%'}}/>
-                  <col style={{width:'22%'}}/>
-                  <col style={{width:'16%'}}/>
+                  <col style={{width:'20%'}}/>
+                  <col style={{width:'13%'}}/>
+                  <col style={{width:'15%'}}/>
+                  <col style={{width:'13%'}}/>
+                  <col style={{width:'12%'}}/>
+                  <col style={{width:'12%'}}/>
                 </colgroup>
                 <thead>
                   <tr>
                     <th>Нода</th>
                     <th>Host</th>
-                    <th>Образ</th>
+                    <th>MTG</th>
                     <th>Собран</th>
-                    <th style={{textAlign:'right'}}>Обновить</th>
+                    <th>Агент</th>
+                    <th style={{textAlign:'right'}}>MTG</th>
+                    <th style={{textAlign:'right'}}>Агент</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -972,6 +1119,9 @@ function VersionBlock({ nodes, panelVersion }) {
                     const raw = versions[n.id];
                     const parsed = raw ? parseVer(raw) : null;
                     const upd = updating[n.id];
+                    const agentV = agentVersions[n.id];
+                    const updA = updatingAgent[n.id];
+                    const agentOutdated = agentV && updateInfo?.agent?.latest && agentV !== 'error' && agentV !== 'unknown' && agentV !== updateInfo.agent.latest;
                     return (
                       <tr key={n.id}>
                         <td style={{fontWeight:600,fontSize:13}}>{n.name}</td>
@@ -987,27 +1137,51 @@ function VersionBlock({ nodes, panelVersion }) {
                           }
                         </td>
                         <td style={{fontSize:11,color:'var(--t2)'}}>{parsed?.date || '—'}</td>
+                        <td>
+                          {!n.agent_port
+                            ? <span style={{color:'var(--t3)',fontSize:11}}>—</span>
+                            : checking && !agentV
+                              ? <span style={{color:'var(--t3)',fontSize:11}}>...</span>
+                              : !agentV
+                                ? <span style={{color:'var(--t3)',fontSize:11}}>—</span>
+                                : agentV === 'error'
+                                  ? <span className="badge badge-red">ошибка</span>
+                                  : agentOutdated
+                                    ? <span className="badge badge-amber" style={{fontFamily:'var(--mono)'}}>{agentV}</span>
+                                    : <span className="badge badge-green" style={{fontFamily:'var(--mono)'}}>{agentV}</span>
+                          }
+                        </td>
                         <td style={{textAlign:'right'}}>
                           <button className="btn btn-ghost btn-sm" onClick={()=>updateNode(n)}
                             disabled={upd||!raw||raw==='error'}
-                            title="docker pull ninесекунд/mtg:2 — скачать последний патч">
-                            {upd ? <><span className="spin spin-sm"/> ...</> : <><I.Download/> pull</>}
+                            title="docker pull nineseconds/mtg:2">
+                            {upd ? <span className="spin spin-sm"/> : <I.Download/>}
                           </button>
+                        </td>
+                        <td style={{textAlign:'right'}}>
+                          {n.agent_port ? (
+                            <button className="btn btn-ghost btn-sm" onClick={()=>updateAgent(n)}
+                              disabled={updA||!agentV||agentV==='error'}
+                              title="Обновить агент из GitHub">
+                              {updA ? <span className="spin spin-sm"/> : <I.Download/>}
+                            </button>
+                          ) : <span style={{color:'var(--t3)',fontSize:11}}>—</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={checkVersions} disabled={checking}>
-                {checking ? <><span className="spin spin-sm"/> Проверяю...</> : <><I.RefreshCw/> Проверить версии</>}
+              <button className="btn btn-ghost" onClick={()=>{checkVersions();checkUpdates();}} disabled={checking||checkingUpdates}>
+                {checking||checkingUpdates ? <><span className="spin spin-sm"/> Проверяю...</> : <><I.RefreshCw/> Проверить всё</>}
               </button>
               <button className="btn btn-secondary" onClick={updateAllNodes}
                 disabled={Object.values(updating).some(Boolean)}>
-                <I.Download/> Обновить все ноды
+                <I.Download/> Обновить все MTG
               </button>
               <button className="btn btn-primary" onClick={()=>setOpen(false)}>Закрыть</button>
             </div>
@@ -1043,7 +1217,7 @@ function Dashboard({ nodes, onSelectNode, onManageNode }) {
       <div className="topbar">
         <div className="topbar-left">
           <div className="page-title">Панель <em>управления</em></div>
-          <div className="page-desc">MTG Proxy AdminPanel</div>
+          <div className="page-desc">ST VILLAGE AdminPanel</div>
         </div>
         <div className="topbar-right">
           {refreshing && <span className="refreshing"><span className="spin"/></span>}
@@ -2061,6 +2235,133 @@ function AllUsers({ nodes, onSelectNode }) {
   );
 }
 
+/* ── Plans Manager ──────────────────────────────────────── */
+function PlansManager() {
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // null=list, 'new' or plan object
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const loadPlans = () => { api('GET','/api/plans').then(setPlans).catch(()=>{}).finally(()=>setLoading(false)); };
+  useEffect(()=>{ loadPlans(); },[]);
+
+  const openNew = () => { setForm({name:'',description:'',price:'',currency:'RUB',period:'monthly',max_devices:3,traffic_limit_gb:'',traffic_reset_interval:'monthly',is_active:1,sort_order:0}); setEditing('new'); };
+  const openEdit = (p) => { setForm({...p, traffic_limit_gb: p.traffic_limit_gb||''}); setEditing(p); };
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const save = async () => {
+    if(!form.name||!form.price) { toast('Заполните название и цену','error'); return; }
+    setSaving(true);
+    try {
+      const body = {...form, price: Number(form.price), max_devices: Number(form.max_devices)||3, sort_order: Number(form.sort_order)||0, traffic_limit_gb: form.traffic_limit_gb ? Number(form.traffic_limit_gb) : null};
+      if(editing==='new') await api('POST','/api/plans', body);
+      else await api('PUT',`/api/plans/${editing.id}`, body);
+      toast(editing==='new'?'Тариф создан':'Тариф обновлён','success');
+      setEditing(null); loadPlans();
+    } catch(e){ toast(e.message,'error'); } finally{ setSaving(false); }
+  };
+
+  const remove = async (id) => {
+    if(!confirm('Удалить тариф?')) return;
+    try { await api('DELETE',`/api/plans/${id}`); toast('Тариф удалён','success'); loadPlans(); } catch(e){ toast(e.message,'error'); }
+  };
+
+  const periodLabels = {daily:'Ежедневно', monthly:'Ежемесячно', yearly:'Ежегодно'};
+
+  if(editing) return (
+    <div className="pg">
+      <div className="topbar"><div className="topbar-left">
+        <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(null)}><I.ArrowLeft/> Назад</button>
+        <div className="page-title"><em>{editing==='new'?'Новый тариф':'Редактировать тариф'}</em></div>
+      </div></div>
+      <div style={{maxWidth:600,display:'flex',flexDirection:'column',gap:16}}>
+        <div className="card">
+          <div className="card-header"><div className="card-title"><I.Tag/> Основное</div></div>
+          <div style={{display:'grid',gap:12}}>
+            <div className="form-group"><label className="form-label">Название *</label>
+              <input className="form-input" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Базовый" /></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div className="form-group"><label className="form-label">Цена *</label>
+                <input className="form-input" type="number" value={form.price} onChange={e=>set('price',e.target.value)} placeholder="99" /></div>
+              <div className="form-group"><label className="form-label">Период</label>
+                <select className="form-input" value={form.period} onChange={e=>set('period',e.target.value)}>
+                  <option value="daily">Ежедневно</option><option value="monthly">Ежемесячно</option><option value="yearly">Ежегодно</option>
+                </select></div>
+            </div>
+            <div className="form-group"><label className="form-label">Описание (каждая строка = пункт)</label>
+              <textarea className="form-input" rows={4} value={form.description||''} onChange={e=>set('description',e.target.value)} placeholder={'Скорость до 100 Мбит/с\nДо 3 устройств\nПоддержка 24/7'} style={{resize:'vertical',fontFamily:'var(--sans)'}} /></div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><div className="card-title"><I.Settings/> Лимиты</div></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            <div className="form-group"><label className="form-label">Макс. устройств</label>
+              <input className="form-input" type="number" value={form.max_devices} onChange={e=>set('max_devices',e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Лимит трафика (ГБ)</label>
+              <input className="form-input" type="number" value={form.traffic_limit_gb} onChange={e=>set('traffic_limit_gb',e.target.value)} placeholder="Безлимит" /></div>
+            <div className="form-group"><label className="form-label">Сброс трафика</label>
+              <select className="form-input" value={form.traffic_reset_interval} onChange={e=>set('traffic_reset_interval',e.target.value)}>
+                <option value="daily">Ежедневно</option><option value="monthly">Ежемесячно</option><option value="never">Никогда</option>
+              </select></div>
+            <div className="form-group"><label className="form-label">Порядок сортировки</label>
+              <input className="form-input" type="number" value={form.sort_order} onChange={e=>set('sort_order',e.target.value)} /></div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+              <input type="checkbox" checked={!!form.is_active} onChange={e=>set('is_active',e.target.checked?1:0)} style={{width:18,height:18}} />
+              <span style={{fontSize:14}}>Активен (виден клиентам)</span>
+            </label>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-ghost" onClick={()=>setEditing(null)}>Отмена</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving} style={{flex:1,justifyContent:'center'}}>
+            {saving?<span className="spin spin-sm"/>:<><I.Save/> {editing==='new'?'Создать':'Сохранить'}</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pg">
+      <div className="topbar">
+        <div className="topbar-left"><div className="page-title"><em>Тарифы</em></div></div>
+        <div className="topbar-right">
+          <button className="btn btn-primary btn-sm" onClick={openNew}><I.Plus/> Новый тариф</button>
+        </div>
+      </div>
+
+      {loading ? <div style={{textAlign:'center',padding:40}}><span className="spin"/></div> : plans.length===0 ? (
+        <div className="card"><div className="empty"><div className="empty-icon"><I.Tag/></div><div className="empty-title">Нет тарифов</div><div className="empty-text">Создайте первый тариф для отображения на сайте</div><button className="btn btn-primary" onClick={openNew}><I.Plus/> Создать тариф</button></div></div>
+      ) : (
+        <div style={{display:'grid',gap:12}}>
+          {plans.map(p => (
+            <div key={p.id} className="card" style={{cursor:'pointer'}} onClick={()=>openEdit(p)}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style={{display:'flex',alignItems:'center',gap:12}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:p.is_active?'rgba(124,111,247,0.1)':'rgba(107,114,128,0.1)',display:'flex',alignItems:'center',justifyContent:'center',color:p.is_active?'var(--vi)':'var(--t3)'}}><I.Tag/></div>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:15}}>{p.name}</div>
+                    <div style={{fontSize:12,color:'var(--t2)'}}>{p.price} {p.currency||'RUB'} / {periodLabels[p.period]||p.period} · до {p.max_devices} устр.{p.traffic_limit_gb ? ` · ${p.traffic_limit_gb} ГБ` : ' · Безлимит'}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span className={`badge ${p.is_active?'badge-green':'badge-red'}`}><span className={`dot ${p.is_active?'dot-live':''}`}/>{p.is_active?'Активен':'Скрыт'}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();remove(p.id);}} title="Удалить"><I.Trash/></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Settings ───────────────────────────────────────────── */
 function Settings() {
   const [enabled, setEnabled] = useState(false);
@@ -2163,9 +2464,565 @@ function Settings() {
   );
 }
 
+/* ── Team Management (admin only) ───────────────────────── */
+function TeamManager() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // 'new' or user obj
+
+  const load = () => { api('GET','/api/admin/users').then(setUsers).catch(()=>{}).finally(()=>setLoading(false)); };
+  useEffect(()=>{ load(); },[]);
+
+  const ROLES = {admin:'Админ', moderator:'Модератор', support:'Саппорт'};
+  const ROLE_COLORS = {admin:'badge-violet', moderator:'badge-blue', support:'badge-green'};
+
+  const save = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = { username:f.get('username'), password:f.get('password')||undefined, role:f.get('role'), display_name:f.get('display_name') };
+    try {
+      if(editing==='new') await api('POST','/api/admin/users',body);
+      else await api('PUT',`/api/admin/users/${editing.id}`,{...body, status:f.get('status')||'active'});
+      toast('Сохранено','success'); setEditing(null); load();
+    } catch(e){ toast(e.message,'error'); }
+  };
+
+  const remove = async (id) => {
+    if(!confirm('Удалить пользователя?')) return;
+    try { await api('DELETE',`/api/admin/users/${id}`); toast('Удалён','success'); load(); } catch(e){ toast(e.message,'error'); }
+  };
+
+  return (
+    <div style={{marginTop:24}}>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title"><I.Users/> Команда</div>
+          <button className="btn btn-primary btn-sm" onClick={()=>setEditing('new')}><I.Plus/> Добавить</button>
+        </div>
+
+        {editing && (
+          <form onSubmit={save} style={{background:'var(--bg3)',border:'1px solid var(--b1)',borderRadius:10,padding:16,marginBottom:16}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div className="form-group"><label className="form-label">Логин</label>
+                <input className="form-input" name="username" defaultValue={editing!=='new'?editing.username:''} required
+                  readOnly={editing!=='new'} style={editing!=='new'?{opacity:0.6}:{}} /></div>
+              <div className="form-group"><label className="form-label">{editing==='new'?'Пароль':'Новый пароль (пусто=без изменений)'}</label>
+                <input className="form-input" name="password" type="password" placeholder={editing==='new'?'мин 6 символов':'оставить пустым'} {...(editing==='new'?{required:true,minLength:6}:{})}/></div>
+              <div className="form-group"><label className="form-label">Отображаемое имя</label>
+                <input className="form-input" name="display_name" defaultValue={editing!=='new'?editing.display_name:''} /></div>
+              <div className="form-group"><label className="form-label">Роль</label>
+                <select className="form-input" name="role" defaultValue={editing!=='new'?editing.role:'support'}>
+                  <option value="admin">Админ</option><option value="moderator">Модератор</option><option value="support">Саппорт</option>
+                </select></div>
+              {editing!=='new' && <div className="form-group"><label className="form-label">Статус</label>
+                <select className="form-input" name="status" defaultValue={editing.status}>
+                  <option value="active">Активен</option><option value="disabled">Отключён</option>
+                </select></div>}
+            </div>
+            <div style={{display:'flex',gap:8,marginTop:12}}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={()=>setEditing(null)}>Отмена</button>
+              <button className="btn btn-primary btn-sm" type="submit"><I.Save/> Сохранить</button>
+            </div>
+          </form>
+        )}
+
+        {loading ? <div style={{textAlign:'center',padding:40}}><span className="spin"/></div> : users.length===0 ? (
+          <p style={{color:'var(--t3)',fontSize:13}}>Нет пользователей. Используется только токен авторизации.</p>
+        ) : (
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Последний вход</th><th></th></tr></thead>
+            <tbody>{users.map(u => (
+              <tr key={u.id}>
+                <td style={{fontFamily:'var(--mono)',fontSize:13}}>{u.username}</td>
+                <td>{u.display_name||'—'}</td>
+                <td><span className={`badge ${ROLE_COLORS[u.role]||''}`}>{ROLES[u.role]||u.role}</span></td>
+                <td><span className={`badge ${u.status==='active'?'badge-green':'badge-red'}`}>{u.status==='active'?'Активен':'Отключён'}</span></td>
+                <td style={{fontSize:12,color:'var(--t3)'}}>{u.last_login_at?new Date(u.last_login_at).toLocaleString('ru'):'—'}</td>
+                <td>
+                  <div style={{display:'flex',gap:6}}>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(u)}><I.Settings/></button>
+                    <button className="btn btn-ghost btn-sm" style={{color:'var(--re)'}} onClick={()=>remove(u.id)}><I.X/></button>
+                  </div>
+                </td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Customers Manager (registered site users) ──────────── */
+function CustomersManager() {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null); // customer detail
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const load = () => { api('GET','/api/customers').then(setCustomers).catch(()=>{}).finally(()=>setLoading(false)); };
+  useEffect(()=>{ load(); },[]);
+
+  const openDetail = async (c) => {
+    setSelected(c); setDetailLoading(true); setEditing(false);
+    try { const d = await api('GET',`/api/customers/${c.id}`); setDetail(d); }
+    catch { toast('Ошибка загрузки','error'); }
+    finally { setDetailLoading(false); }
+  };
+
+  const toggleStatus = async (c) => {
+    const newStatus = c.status==='active'?'banned':'active';
+    try { await api('PUT',`/api/customers/${c.id}/status`,{status:newStatus}); toast(newStatus==='banned'?'Заблокирован':'Разблокирован','success'); load(); if(detail) setDetail({...detail,status:newStatus}); }
+    catch(e){ toast(e.message,'error'); }
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api('PUT',`/api/customers/${selected.id}`,{
+        name: f.get('name'), email: f.get('email'),
+        balance: parseFloat(f.get('balance'))||0,
+        status: f.get('status')
+      });
+      toast('Сохранено','success'); setEditing(false); load();
+      openDetail(selected);
+    } catch(e){ toast(e.message,'error'); }
+  };
+
+  const removeCustomer = async (id) => {
+    if(!confirm('Удалить клиента и все его заказы/платежи? Это необратимо!')) return;
+    try { await api('DELETE',`/api/customers/${id}`); toast('Удалён','success'); setSelected(null); setDetail(null); load(); }
+    catch(e){ toast(e.message,'error'); }
+  };
+
+  const cancelOrder = async (orderId) => {
+    try { await api('PUT',`/api/orders/${orderId}/status`,{status:'cancelled'}); toast('Заказ отменён','success'); openDetail(selected); }
+    catch(e){ toast(e.message,'error'); }
+  };
+
+  const filtered = customers.filter(c => {
+    if(!search) return true;
+    const s = search.toLowerCase();
+    return (c.email||'').toLowerCase().includes(s) || (c.name||'').toLowerCase().includes(s) ||
+           (c.telegram_username||'').toLowerCase().includes(s) || String(c.id).includes(s);
+  });
+
+  const STATUS_BADGE = {active:'badge-green', banned:'badge-red'};
+  const ORDER_BADGE = {active:'badge-green', pending:'badge-amber', cancelled:'badge-red', expired:'badge-purple', error:'badge-red'};
+  const PAY_BADGE = {succeeded:'badge-green', pending:'badge-amber', cancelled:'badge-red'};
+
+  if(selected && detail) {
+    return (
+      <div className="pg">
+        <div className="topbar">
+          <div className="topbar-left">
+            <button className="btn btn-ghost btn-sm" onClick={()=>{setSelected(null);setDetail(null);}}><I.ArrowLeft/> Назад</button>
+            <div className="page-title">Клиент <em>#{detail.id}</em></div>
+          </div>
+          <div className="topbar-right">
+            <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(!editing)}><I.Settings/> Редактировать</button>
+            <button className={`btn btn-sm ${detail.status==='active'?'btn-ghost':'btn-primary'}`} style={detail.status==='active'?{color:'var(--re)'}:{}} onClick={()=>toggleStatus(detail)}>
+              {detail.status==='active'?'Заблокировать':'Разблокировать'}
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{color:'var(--re)'}} onClick={()=>removeCustomer(detail.id)}><I.X/> Удалить</button>
+          </div>
+        </div>
+
+        {detailLoading ? <div className="loading-center"><span className="spin"/> Загрузка...</div> : (
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            {/* Info card */}
+            {editing ? (
+              <form className="card" onSubmit={saveEdit}>
+                <div className="card-header"><div className="card-title">Редактирование</div></div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  <div className="form-group"><label className="form-label">Имя</label>
+                    <input className="form-input" name="name" defaultValue={detail.name||''}/></div>
+                  <div className="form-group"><label className="form-label">Email</label>
+                    <input className="form-input" name="email" type="email" defaultValue={detail.email||''}/></div>
+                  <div className="form-group"><label className="form-label">Баланс</label>
+                    <input className="form-input" name="balance" type="number" step="0.01" defaultValue={detail.balance||0}/></div>
+                  <div className="form-group"><label className="form-label">Статус</label>
+                    <select className="form-input" name="status" defaultValue={detail.status}>
+                      <option value="active">Активен</option><option value="banned">Заблокирован</option>
+                    </select></div>
+                </div>
+                <div style={{display:'flex',gap:8,marginTop:12}}>
+                  <button className="btn btn-ghost btn-sm" type="button" onClick={()=>setEditing(false)}>Отмена</button>
+                  <button className="btn btn-primary btn-sm" type="submit"><I.Save/> Сохранить</button>
+                </div>
+              </form>
+            ) : (
+              <div className="card">
+                <div className="card-header"><div className="card-title"><I.User/> Информация</div></div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16}}>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>ID</div><div style={{fontFamily:'var(--mono)',fontSize:13}}>#{detail.id}</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Имя</div><div>{detail.name||'—'}</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Email</div><div style={{fontFamily:'var(--mono)',fontSize:13}}>{detail.email||'—'} {detail.email_verified?'✓':''}</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Telegram</div><div>{detail.telegram_username?`@${detail.telegram_username}`:'—'} {detail.telegram_id?`(${detail.telegram_id})`:''}</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Баланс</div><div style={{fontWeight:600}}>{(detail.balance||0).toFixed(2)} ₽</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Статус</div><span className={`badge ${STATUS_BADGE[detail.status]||''}`}>{detail.status==='active'?'Активен':'Заблокирован'}</span></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Регистрация</div><div style={{fontSize:12}}>{new Date(detail.created_at).toLocaleString('ru')}</div></div>
+                  <div><div style={{fontSize:11,color:'var(--t3)'}}>Последний вход</div><div style={{fontSize:12}}>{detail.last_login_at?new Date(detail.last_login_at).toLocaleString('ru'):'—'}</div></div>
+                </div>
+              </div>
+            )}
+
+            {/* Orders */}
+            <div className="card">
+              <div className="card-header"><div className="card-title"><I.Tag/> Заказы ({(detail.orders||[]).length})</div></div>
+              {(detail.orders||[]).length===0 ? <p style={{color:'var(--t3)',fontSize:13}}>Нет заказов</p> : (
+                <div className="tbl-wrap"><table className="tbl">
+                  <thead><tr><th>#</th><th>Тариф</th><th>Статус</th><th>Цена</th><th>Период</th><th>Истекает</th><th>Создан</th><th></th></tr></thead>
+                  <tbody>{(detail.orders||[]).map(o => (
+                    <tr key={o.id}>
+                      <td style={{fontFamily:'var(--mono)',fontSize:12}}>{o.id}</td>
+                      <td>{o.plan_id||'—'}</td>
+                      <td><span className={`badge ${ORDER_BADGE[o.status]||''}`}>{o.status}</span></td>
+                      <td>{o.price} {o.currency}</td>
+                      <td>{o.period==='monthly'?'Мес.':o.period==='yearly'?'Год':'День'}</td>
+                      <td style={{fontSize:12}}>{o.expires_at?new Date(o.expires_at).toLocaleDateString('ru'):'—'}</td>
+                      <td style={{fontSize:12}}>{new Date(o.created_at).toLocaleDateString('ru')}</td>
+                      <td>{o.status==='active'||o.status==='pending'?<button className="btn btn-ghost btn-sm" style={{color:'var(--re)'}} onClick={()=>cancelOrder(o.id)}>Отменить</button>:null}</td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              )}
+            </div>
+
+            {/* Payments */}
+            <div className="card">
+              <div className="card-header"><div className="card-title"><I.CreditCard/> Платежи ({(detail.payments||[]).length})</div></div>
+              {(detail.payments||[]).length===0 ? <p style={{color:'var(--t3)',fontSize:13}}>Нет платежей</p> : (
+                <div className="tbl-wrap"><table className="tbl">
+                  <thead><tr><th>#</th><th>Заказ</th><th>Сумма</th><th>Статус</th><th>Способ</th><th>Дата</th><th></th></tr></thead>
+                  <tbody>{(detail.payments||[]).map(p => (
+                    <tr key={p.id}>
+                      <td style={{fontFamily:'var(--mono)',fontSize:12}}>{p.id}</td>
+                      <td style={{fontFamily:'var(--mono)',fontSize:12}}>#{p.order_id}</td>
+                      <td style={{fontWeight:600}}>{p.amount} {p.currency}</td>
+                      <td><span className={`badge ${PAY_BADGE[p.status]||''}`}>{p.status==='succeeded'?'Оплачен':p.status==='pending'?'Ожидание':'Отменён'}</span></td>
+                      <td>{p.method||'—'}</td>
+                      <td style={{fontSize:12}}>{new Date(p.created_at).toLocaleString('ru')}</td>
+                      <td>{p.status==='pending'&&<button className="btn btn-ghost btn-sm" onClick={async(e)=>{e.stopPropagation();try{const r=await api('POST',`/api/payments/${p.id}/check`);toast(r.changed?`Статус: ${r.status}`:'Статус не изменился',r.changed?'success':'info');if(r.changed)openDetail(selected);}catch(er){toast(er.message,'error');}}}>Проверить</button>}</td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="pg">
+      <div className="topbar">
+        <div className="topbar-left">
+          <div className="page-title">Клиенты <em>сайта</em></div>
+          <div className="page-desc">{loading ? '...' : `${customers.length} зарегистрированных пользователей`}</div>
+        </div>
+        <div className="topbar-right">
+          <input className="form-input" placeholder="Поиск..."
+            value={search} onChange={e=>setSearch(e.target.value)}
+            style={{maxWidth:260,width:'100%',height:32,fontSize:13}} />
+        </div>
+      </div>
+
+      {loading ? <div className="loading-center"><span className="spin"/> Загрузка...</div> : filtered.length===0 ? (
+        <div className="card" style={{textAlign:'center',padding:40,color:'var(--t3)'}}>
+          {search ? 'Ничего не найдено' : 'Нет зарегистрированных клиентов'}
+        </div>
+      ) : (
+        <div className="card">
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Telegram</th><th>Баланс</th><th>Статус</th><th>Регистрация</th><th>Посл. вход</th><th></th></tr></thead>
+            <tbody>{filtered.map(c => (
+              <tr key={c.id} style={{cursor:'pointer'}} onClick={()=>openDetail(c)}>
+                <td style={{fontFamily:'var(--mono)',fontSize:12}}>#{c.id}</td>
+                <td>{c.name||'—'}</td>
+                <td style={{fontFamily:'var(--mono)',fontSize:12}}>{c.email||'—'} {c.email_verified?<span style={{color:'var(--gr)',fontSize:10}}>✓</span>:''}</td>
+                <td style={{fontSize:12}}>{c.telegram_username?`@${c.telegram_username}`:'—'}</td>
+                <td style={{fontWeight:600}}>{(c.balance||0).toFixed(2)} ₽</td>
+                <td><span className={`badge ${STATUS_BADGE[c.status]||''}`}>{c.status==='active'?'Активен':'Бан'}</span></td>
+                <td style={{fontSize:12}}>{new Date(c.created_at).toLocaleDateString('ru')}</td>
+                <td style={{fontSize:12}}>{c.last_login_at?new Date(c.last_login_at).toLocaleDateString('ru'):'—'}</td>
+                <td>
+                  <div style={{display:'flex',gap:6}}>
+                    <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();toggleStatus(c);}}
+                      style={c.status==='active'?{color:'var(--re)'}:{color:'var(--gr)'}}>
+                      {c.status==='active'?'Бан':'Разбан'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Database Manager ──────────────────────────────────── */
+function DatabaseManager() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [optimizing, setOptimizing] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [result, setResult] = useState(null);
+  const toasts = useToast();
+
+  const loadStats = async () => {
+    try {
+      const data = await api('GET', '/api/db/stats');
+      setStats(data);
+    } catch(e) { toasts.error(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadStats(); }, []);
+
+  const handleOptimize = async () => {
+    setOptimizing(true); setResult(null);
+    try {
+      const data = await api('POST', '/api/db/optimize');
+      setResult(data);
+      toasts.ok('База данных оптимизирована');
+      loadStats();
+    } catch(e) { toasts.error(e.message); }
+    finally { setOptimizing(false); }
+  };
+
+  const handleCleanup = async () => {
+    setCleaning(true); setResult(null);
+    try {
+      const data = await api('POST', '/api/db/cleanup');
+      setResult(data);
+      toasts.ok('Очистка завершена');
+      loadStats();
+    } catch(e) { toasts.error(e.message); }
+    finally { setCleaning(false); }
+  };
+
+  const fmtSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' Б';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' КБ';
+    return (bytes/1048576).toFixed(2) + ' МБ';
+  };
+
+  if (loading) return <div className="section-card" style={{textAlign:'center',padding:40}}>Загрузка...</div>;
+
+  return (
+    <div>
+      <div className="section-header"><I.Database/> База данных</div>
+
+      {/* DB Size */}
+      {stats && (
+        <div className="section-card" style={{marginBottom:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:600}}>Размер базы данных</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--primary)',marginTop:4}}>{fmtSize(stats.size_bytes)}</div>
+            </div>
+            <div style={{fontSize:12,color:'var(--t3)'}}>SQLite</div>
+          </div>
+
+          <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Таблицы</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8}}>
+            {stats.tables.map(t => (
+              <div key={t.name} style={{background:'var(--bg2)',borderRadius:8,padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:12,color:'var(--t2)'}}>{t.name}</span>
+                <span style={{fontSize:13,fontWeight:700}}>{t.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+        <div className="section-card">
+          <div style={{fontSize:14,fontWeight:600,marginBottom:8}}>Оптимизация</div>
+          <p style={{fontSize:12,color:'var(--t3)',marginBottom:12}}>
+            Выполняет VACUUM и ANALYZE для оптимизации размера и производительности. Также проверяет целостность базы.
+          </p>
+          <button className="btn btn-primary" onClick={handleOptimize} disabled={optimizing} style={{width:'100%'}}>
+            {optimizing ? <>⏳ Оптимизация...</> : <><I.RefreshCw/> Оптимизировать</>}
+          </button>
+        </div>
+
+        <div className="section-card">
+          <div style={{fontSize:14,fontWeight:600,marginBottom:8}}>Очистка</div>
+          <p style={{fontSize:12,color:'var(--t3)',marginBottom:12}}>
+            Удаляет истёкшие сессии, историю подключений старше 30 дней и устаревшие данные.
+          </p>
+          <button className="btn btn-warning" onClick={handleCleanup} disabled={cleaning} style={{width:'100%'}}>
+            {cleaning ? <>⏳ Очистка...</> : <><I.Trash/> Очистить</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Result */}
+      {result && (
+        <div className="section-card" style={{background:'var(--bg2)'}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Результат</div>
+          <pre style={{fontSize:11,color:'var(--t2)',whiteSpace:'pre-wrap',margin:0,fontFamily:'monospace'}}>
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Announcements Manager ─────────────────────────────── */
+function AnnouncementsManager() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // null | 'new' | announcement object
+  const [form, setForm] = useState({ title: '', message: '', type: 'info' });
+  const [saving, setSaving] = useState(false);
+  const toasts = useToast();
+
+  const load = async () => {
+    try {
+      const data = await api('GET', '/api/announcements');
+      setItems(data);
+    } catch(e) { toasts.error(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleNew = () => {
+    setForm({ title: '', message: '', type: 'info' });
+    setEditing('new');
+  };
+
+  const handleEdit = (a) => {
+    setForm({ title: a.title, message: a.message, type: a.type });
+    setEditing(a);
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.message.trim()) { toasts.error('Заполните все поля'); return; }
+    setSaving(true);
+    try {
+      if (editing === 'new') {
+        await api('POST', '/api/announcements', form);
+        toasts.ok('Уведомление создано');
+      } else {
+        await api('PUT', `/api/announcements/${editing.id}`, form);
+        toasts.ok('Уведомление обновлено');
+      }
+      setEditing(null);
+      load();
+    } catch(e) { toasts.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleToggle = async (a) => {
+    try {
+      await api('PUT', `/api/announcements/${a.id}`, { title: a.title, message: a.message, type: a.type, is_active: a.is_active ? 0 : 1 });
+      load();
+    } catch(e) { toasts.error(e.message); }
+  };
+
+  const handleDelete = async (a) => {
+    if (!confirm('Удалить уведомление?')) return;
+    try {
+      await api('DELETE', `/api/announcements/${a.id}`);
+      toasts.ok('Удалено');
+      load();
+    } catch(e) { toasts.error(e.message); }
+  };
+
+  const typeLabels = { info: '💡 Инфо', warning: '⚠️ Важно', success: '✅ Успех', danger: '🔴 Срочно' };
+  const typeBadges = { info: 'badge', warning: 'badge badge-accent', success: 'badge', danger: 'badge badge-accent' };
+  const typeColors = { info: '#6366f1', warning: '#f59e0b', success: '#22c55e', danger: '#ef4444' };
+
+  if (loading) return <div className="section-card" style={{textAlign:'center',padding:40}}>Загрузка...</div>;
+
+  return (
+    <div>
+      <div className="section-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span><I.Bell/> Уведомления для клиентов</span>
+        <button className="btn btn-primary btn-sm" onClick={handleNew}><I.Plus/> Создать</button>
+      </div>
+
+      {/* Edit Form */}
+      {editing && (
+        <div className="section-card" style={{marginBottom:16,border:'1px solid var(--primary)',borderRadius:12}}>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>
+            {editing === 'new' ? 'Новое уведомление' : 'Редактирование'}
+          </div>
+          <div style={{display:'grid',gap:10}}>
+            <input className="input" placeholder="Заголовок" value={form.title}
+              onChange={e => setForm({...form, title: e.target.value})} />
+            <textarea className="input" placeholder="Сообщение" rows={3} value={form.message}
+              onChange={e => setForm({...form, message: e.target.value})} style={{resize:'vertical'}} />
+            <div style={{display:'flex',gap:8}}>
+              {Object.entries(typeLabels).map(([k,v]) => (
+                <button key={k} className={`btn btn-sm ${form.type===k ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setForm({...form, type: k})} style={form.type===k ? {background:typeColors[k]} : {}}>
+                  {v}
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Отмена</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+                {saving ? 'Сохранение...' : <><I.Save/> Сохранить</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {items.length === 0 ? (
+        <div className="section-card" style={{textAlign:'center',padding:30,color:'var(--t3)'}}>
+          Нет уведомлений. Создайте первое уведомление для клиентов.
+        </div>
+      ) : (
+        <div style={{display:'grid',gap:8}}>
+          {items.map(a => (
+            <div key={a.id} className="section-card" style={{display:'flex',alignItems:'center',gap:12,opacity: a.is_active ? 1 : 0.5}}>
+              <div style={{width:4,height:40,borderRadius:4,background:typeColors[a.type]||typeColors.info,flexShrink:0}} />
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+                  <span style={{fontSize:13,fontWeight:600}}>{a.title}</span>
+                  <span style={{fontSize:10,padding:'1px 6px',borderRadius:6,background:typeColors[a.type]+'22',color:typeColors[a.type]}}>
+                    {typeLabels[a.type]||a.type}
+                  </span>
+                  {!a.is_active && <span style={{fontSize:10,padding:'1px 6px',borderRadius:6,background:'var(--bg2)',color:'var(--t3)'}}>Скрыто</span>}
+                </div>
+                <div style={{fontSize:12,color:'var(--t3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.message}</div>
+              </div>
+              <div style={{display:'flex',gap:4,flexShrink:0}}>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleToggle(a)} title={a.is_active ? 'Скрыть' : 'Показать'}>
+                  {a.is_active ? <I.ToggleRight/> : <I.ToggleLeft/>}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(a)}><I.Edit/></button>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(a)} style={{color:'var(--danger)'}}><I.Trash/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── App ────────────────────────────────────────────────── */
 function App() {
   const [authed, setAuthed] = useState(!!getToken());
+  const [role, setRole] = useState(getAdminRole());
   const [page, setPage] = useState('dashboard');
   const [nodes, setNodes] = useState([]);
   const [selNode, setSelNode] = useState(null);      // for users page
@@ -2193,6 +3050,13 @@ function App() {
       .catch(() => {});
   }, []);
 
+  // Fetch actual role from server on mount
+  useEffect(() => {
+    if (authed) {
+      api('GET','/api/admin/role').then(r => { setRole(r.role); setAdminRole(r.role); }).catch(()=>{});
+    }
+  }, [authed]);
+
   useEffect(()=>{ if(authed) loadNodes(); },[authed]);
   useEffect(()=>{ if(nodes.length&&!nodes[0]._userCount) loadCounts(nodes); },[nodes]);
 
@@ -2200,14 +3064,20 @@ function App() {
   const selectNode = (n) => { setSelNode(n); setPage('users'); };
   const openNodeView = (n) => { setSelNodeView(n); setPage('node'); };
 
-  const NAV = [
-    { id:'dashboard', icon:<I.LayoutDash/>, label:'Дашборд' },
-    { id:'nodes',     icon:<I.Server/>,     label:'Ноды' },
-    { id:'users',     icon:<I.Users/>,      label:'Клиенты' },
-    { id:'settings',  icon:<I.Settings/>,   label:'Настройки' },
+  // Role-based nav: admin=all, moderator=no settings, support=dashboard+customers only
+  const NAV_ALL = [
+    { id:'dashboard',  icon:<I.LayoutDash/>, label:'Дашборд',    roles:['admin','moderator','support'] },
+    { id:'nodes',      icon:<I.Server/>,     label:'Ноды',       roles:['admin','moderator'] },
+    { id:'users',      icon:<I.Network/>,    label:'Прокси',     roles:['admin','moderator'] },
+    { id:'customers',  icon:<I.UserCog/>,    label:'Клиенты',    roles:['admin','moderator','support'] },
+    { id:'plans',      icon:<I.Tag/>,        label:'Тарифы',     roles:['admin','moderator'] },
+    { id:'database',   icon:<I.Database/>,   label:'БД',         mobileLabel:'БД',          roles:['admin'] },
+    { id:'announcements',icon:<I.Bell/>,     label:'Уведомления',mobileLabel:'Увед.',       roles:['admin'] },
+    { id:'settings',   icon:<I.Settings/>,   label:'Настройки',  mobileLabel:'Настр.',      roles:['admin'] },
   ];
+  const NAV = NAV_ALL.filter(n => n.roles.includes(role));
 
-  if(!authed) return <><Login onLogin={t=>{setToken(t);setAuthed(true);}}/><Toasts list={toasts}/></>;
+  if(!authed) return <><Login onLogin={(t,r)=>{setToken(t);setAdminRole(r||'admin');setRole(r||'admin');setAuthed(true);}}/><Toasts list={toasts}/></>;
 
   return (
     <div className="app">
@@ -2215,7 +3085,7 @@ function App() {
         <div className="sidebar-logo">
           <div className="logo-icon"><I.Zap/></div>
           <div className="logo-texts">
-            <div className="logo-name">MTG Panel</div>
+            <div className="logo-name">ST VILLAGE Panel</div>
             <div className="logo-sub">{panelVersion || 'adminpanel'}</div>
           </div>
         </div>
@@ -2232,8 +3102,11 @@ function App() {
         <VersionBlock nodes={nodes} panelVersion={panelVersion}/>
 
         <div className="sidebar-footer">
+          {role!=='admin' && <div style={{padding:'6px 10px',fontSize:11,color:'var(--t3)',textAlign:'center'}}>
+            Роль: <span className="badge" style={{fontSize:10}}>{role==='moderator'?'Модератор':'Саппорт'}</span>
+          </div>}
           <button className="btn btn-ghost btn-sm" style={{width:'100%',justifyContent:'center',marginTop:8}}
-            onClick={()=>{setToken('');setAuthed(false);}}>
+            onClick={()=>{setToken('');setAdminRole('admin');setAuthed(false);}}>
             <I.LogOut/> Выйти
           </button>
         </div>
@@ -2245,13 +3118,17 @@ function App() {
         {page==='node'      && selNodeView && <NodePage node={selNodeView} onBack={()=>{setPage('nodes');setSelNodeView(null);}} onManage={selectNode} onReload={loadNodes}/>}
         {page==='users' && !selNode && <AllUsers nodes={nodes} onSelectNode={selectNode}/>}
         {page==='users' && selNode  && <UsersPage node={selNode} onBack={()=>{setSelNode(null);setPage('users');}}/>}
-        {page==='settings'  && <Settings/>}
+        {page==='customers' && <CustomersManager/>}
+        {page==='plans'     && <PlansManager/>}
+        {page==='database'  && <DatabaseManager/>}
+        {page==='announcements' && <AnnouncementsManager/>}
+        {page==='settings'  && <><Settings/><TeamManager/></>}
       </main>
 
       <nav className="mobile-bar">
         {NAV.map(item => (
           <div key={item.id} className={`mob-item ${page===item.id?'active':''}`} onClick={()=>nav(item.id)}>
-            {item.icon}<span className="mob-label">{item.label}</span>
+            {item.icon}<span className="mob-label">{item.mobileLabel||item.label}</span>
           </div>
         ))}
       </nav>

@@ -2,9 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const bcrypt  = require('bcryptjs');
 const db      = require('./db');
 const ssh     = require('./ssh');
 const authenticator = require('./totp');
+const clientRoutes = require('./routes/client');
+const adminExtraRoutes = require('./routes/admin-extra');
 
 // ── Config ────────────────────────────────────────────────
 const AUTH_TOKEN = process.env.AUTH_TOKEN || 'changeme';
@@ -43,21 +46,129 @@ runMigrations();
 
 // ── App ───────────────────────────────────────────────────
 const app = express();
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+
+// Admin panel static files — only under /admin
+app.use('/admin', express.static(path.join(__dirname, '../public')));
+
+// Client SPA static files (built React app)
+const clientDistPath = path.join(__dirname, '../public-client');
+app.use(express.static(clientDistPath));
 
 // ── Public endpoints (no auth) ────────────────────────────
 app.get('/api/version', (req, res) => {
   res.json({ version: pkgVersion });
 });
 
-// ── Auth middleware ───────────────────────────────────────
-app.use('/api', (req, res, next) => {
-  const token = req.headers['x-auth-token'] || req.query.token;
-  if (token !== AUTH_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-  next();
+// ── Check for updates (panel + agent from GitHub) ─────────
+const https = require('https');
+function githubGet(path) {
+  return new Promise((resolve, reject) => {
+    const req = https.get({
+      hostname: 'api.github.com',
+      path,
+      headers: { 'User-Agent': 'stvillage-proxy', 'Accept': 'application/vnd.github.v3+json' },
+      timeout: 10000
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { resolve(null); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
+
+app.get('/api/check-updates', async (req, res) => {
+  try {
+    const [release, agentPkg] = await Promise.allSettled([
+      githubGet('/repos/MaksimTMB/mtg-adminpanel/releases/latest'),
+      githubGet('/repos/MaksimTMB/mtg-adminpanel/contents/mtg-agent/main.py?ref=main'),
+    ]);
+
+    const latest = release.status === 'fulfilled' ? release.value : null;
+    const latestTag = latest?.tag_name?.replace(/^v/, '') || null;
+    const currentVersion = pkgVersion.replace(/^v/, '');
+
+    // Parse agent version from main.py content (base64)
+    let agentVersion = null;
+    if (agentPkg.status === 'fulfilled' && agentPkg.value?.content) {
+      const content = Buffer.from(agentPkg.value.content, 'base64').toString();
+      const match = content.match(/version="([^"]+)"/);
+      if (match) agentVersion = match[1];
+    }
+
+    res.json({
+      panel: {
+        current: currentVersion,
+        latest: latestTag,
+        hasUpdate: latestTag ? latestTag !== currentVersion : false,
+        releaseUrl: latest?.html_url || null,
+        releaseNotes: latest?.body || null,
+        publishedAt: latest?.published_at || null,
+      },
+      agent: {
+        latest: agentVersion,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to check updates', details: e.message });
+  }
 });
+
+// ── Client routes (JWT auth, no admin token) ──────────────
+app.use('/api/client', clientRoutes);
+// YooKassa webhook (IP-verified, no auth)
+app.use('/api', clientRoutes);
+
+// ── Admin user login (returns token + role) ───────────────
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
+  const user = db.prepare('SELECT * FROM admin_users WHERE username = ? AND status = ?').get(username, 'active');
+  if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Неверный логин или пароль' });
+  db.prepare("UPDATE admin_users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
+  res.json({ role: user.role, display_name: user.display_name || user.username });
+});
+
+// ── Auth middleware (admin) ────────────────────────────────
+app.use('/api', (req, res, next) => {
+  // Skip client routes (they use JWT) and webhooks
+  if (req.path.startsWith('/client/') || req.path.startsWith('/webhook/')) return next();
+  // Skip admin login route
+  if (req.path === '/admin/login') return next();
+
+  const token = req.headers['x-auth-token'] || req.query.token;
+
+  // Master token = admin role
+  if (token === AUTH_TOKEN) {
+    req.adminRole = 'admin';
+    return next();
+  }
+
+  // Check if token matches an admin user's username (for role-based sessions)
+  // Admin users send "user:<username>" as token after login
+  if (token && token.startsWith('user:')) {
+    const username = token.slice(5);
+    const user = db.prepare('SELECT * FROM admin_users WHERE username = ? AND status = ?').get(username, 'active');
+    if (user) {
+      req.adminRole = user.role;
+      req.adminUser = user;
+      return next();
+    }
+  }
+
+  return res.status(401).json({ error: 'Unauthorized' });
+});
+
+// ── Admin extra routes (plans, changelog, customers) ──────
+app.use('/api', adminExtraRoutes);
 
 // ── TOTP 2FA ──────────────────────────────────────────────
 const TOTP_ISSUER = 'MTG Panel';
@@ -202,6 +313,18 @@ app.get('/api/nodes/:id/mtg-version', async (req, res) => {
   try {
     const r = await ssh.sshExec(node, "docker inspect nineseconds/mtg:2 --format 'mtg:2 | built {{.Created}}' 2>/dev/null | head -1");
     res.json({ version: (r.output||'').trim().split('\n')[0]||'unknown', raw: r.output });
+  } catch (e) { res.json({ version: 'error', error: e.message }); }
+});
+
+// Check agent version on a node
+app.get('/api/nodes/:id/agent-version', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+  if (!node.agent_port) return res.json({ version: null, reason: 'no agent_port' });
+  try {
+    const r = await ssh.sshExec(node, `curl -s -m 5 http://127.0.0.1:${node.agent_port}/version 2>/dev/null || echo '{"version":"unknown"}'`);
+    const parsed = JSON.parse((r.output||'{}').trim());
+    res.json({ version: parsed.version || 'unknown' });
   } catch (e) { res.json({ version: 'error', error: e.message }); }
 });
 
@@ -409,9 +532,74 @@ app.get('/api/nodes/:id/users/:name/history', (req, res) => {
   res.json(rows.reverse());
 });
 
+// ── Admin Role Info ────────────────────────────────────────
+app.get('/api/admin/role', (req, res) => {
+  res.json({ role: req.adminRole || 'admin' });
+});
+
+// ── Admin Users Management (admin only) ───────────────────
+function requireAdmin(req, res, next) {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Доступ запрещён' });
+  next();
+}
+
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const users = db.prepare(
+    'SELECT id, username, role, display_name, status, created_at, last_login_at FROM admin_users ORDER BY created_at'
+  ).all();
+  res.json(users);
+});
+
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+  const { username, password, role, display_name } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
+  if (!['admin', 'moderator', 'support'].includes(role)) return res.status(400).json({ error: 'Роль: admin, moderator, support' });
+  if (password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+  const existing = db.prepare('SELECT id FROM admin_users WHERE username = ?').get(username);
+  if (existing) return res.status(409).json({ error: 'Пользователь уже существует' });
+  const hash = await bcrypt.hash(password, 12);
+  const result = db.prepare(
+    'INSERT INTO admin_users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)'
+  ).run(username, hash, role, display_name || null);
+  res.json({ id: result.lastInsertRowid });
+});
+
+app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  const user = db.prepare('SELECT * FROM admin_users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Не найден' });
+  const { role, display_name, password, status } = req.body;
+  if (role && !['admin', 'moderator', 'support'].includes(role)) return res.status(400).json({ error: 'Роль: admin, moderator, support' });
+  let hash = user.password_hash;
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+    hash = await bcrypt.hash(password, 12);
+  }
+  db.prepare('UPDATE admin_users SET role=?, display_name=?, password_hash=?, status=? WHERE id=?').run(
+    role || user.role, display_name !== undefined ? display_name : user.display_name,
+    hash, status || user.status, user.id
+  );
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM admin_users WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // ── SPA fallback ──────────────────────────────────────────
-app.get('*', (req, res) => {
+app.get('/admin*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+app.get('*', (req, res) => {
+  // Serve client SPA for all non-API, non-admin routes
+  const clientIndex = path.join(clientDistPath, 'index.html');
+  const fs = require('fs');
+  if (fs.existsSync(clientIndex)) {
+    res.sendFile(clientIndex);
+  } else {
+    // Never fall back to admin panel — show error instead
+    res.status(503).send('<html><body style="background:#080a12;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>Сайт обновляется</h1><p>Клиентская часть ещё не собрана. Пересоберите Docker-образ:</p><pre style="background:#141728;padding:16px;border-radius:8px;text-align:left">cd /opt/mtg-adminpanel\ndocker compose up -d --build</pre><p style="margin-top:24px"><a href="/admin" style="color:#7c6ff7">Перейти в панель администратора →</a></p></div></body></html>');
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────
@@ -513,6 +701,8 @@ async function cleanExpiredUsers() {
 
 setInterval(recordHistory,     5  * 60 * 1000);
 setInterval(cleanExpiredUsers, 60  * 60 * 1000);
+setInterval(() => clientRoutes.processAutoRenewals().catch(e => console.error('Auto-renewal error:', e)), 3600000);
+setInterval(() => clientRoutes.checkPendingPayments().catch(e => console.error('Payment check error:', e)), 2 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🔒 MTG Panel running on http://0.0.0.0:${PORT}`);
@@ -520,4 +710,6 @@ app.listen(PORT, () => {
   console.log(`📦 Version: ${pkgVersion}`);
   setTimeout(recordHistory,     10000);
   setTimeout(cleanExpiredUsers,  5000);
+  setTimeout(() => clientRoutes.processAutoRenewals().catch(() => {}), 15000);
+  setTimeout(() => clientRoutes.checkPendingPayments().catch(() => {}), 20000);
 });

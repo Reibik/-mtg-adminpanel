@@ -193,7 +193,7 @@ async function createRemoteUser(node, name) {
     'USER_DIR="$BASE/$NAME"',
     'if [ -d "$USER_DIR" ]; then echo EXISTS; exit 1; fi',
     'PORT=$(ls $BASE 2>/dev/null | wc -l)', 'PORT=$((START_PORT + PORT))',
-    "SECRET=\"ee$(openssl rand -hex 16)$(echo -n 'google.com' | xxd -p)\"",
+    "SECRET=\"ee$(openssl rand -hex 16)676f6f676c652e636f6d\"",
     'mkdir -p "$USER_DIR"',
     'printf \'secret = "%s"\nbind-to = "0.0.0.0:3128"\n\' "$SECRET" > "$USER_DIR/config.toml"',
     'printf \'services:\n  mtg-%s:\n    image: nineseconds/mtg:2\n    container_name: mtg-%s\n    restart: unless-stopped\n    ports:\n      - "%s:3128"\n    volumes:\n      - %s/config.toml:/config.toml:ro\n    command: run /config.toml\n\' "$NAME" "$NAME" "$PORT" "$USER_DIR" > "$USER_DIR/docker-compose.yml"',

@@ -55,23 +55,23 @@ echo -e "${CYAN}▶ Удаляем файлы...${NC}"
 rm -rf "$INSTALL_DIR"
 echo -e "${GREEN}✅ Директория удалена${NC}"
 
-# Удаляем systemd сервис
-if [ -f "/etc/systemd/system/mtg-adminpanel.service" ]; then
-    echo -e "${CYAN}▶ Удаляем systemd сервис...${NC}"
-    systemctl disable mtg-adminpanel 2>/dev/null
-    rm -f /etc/systemd/system/mtg-adminpanel.service
-    systemctl daemon-reload
-    echo -e "${GREEN}✅ Сервис удалён${NC}"
-fi
+# Удаляем systemd сервисы (все возможные имена)
+for svc in stvillage-proxy mtg-proxy mtg-adminpanel; do
+    if [ -f "/etc/systemd/system/${svc}.service" ]; then
+        echo -e "${CYAN}▶ Удаляем systemd сервис ${svc}...${NC}"
+        systemctl disable "$svc" 2>/dev/null
+        rm -f "/etc/systemd/system/${svc}.service"
+    fi
+done
+systemctl daemon-reload
+echo -e "${GREEN}✅ Сервисы удалены${NC}"
 
-# Удаляем Nginx конфиг
-if [ -f "/etc/nginx/sites-available/mtg-panel" ]; then
-    echo -e "${CYAN}▶ Удаляем Nginx конфиг...${NC}"
-    rm -f /etc/nginx/sites-available/mtg-panel
-    rm -f /etc/nginx/sites-enabled/mtg-panel
-    systemctl reload nginx 2>/dev/null
-    echo -e "${GREEN}✅ Nginx конфиг удалён${NC}"
-fi
+# Удаляем Nginx конфиги (все возможные имена)
+for conf in stvillage-proxy mtg-proxy mtg-panel; do
+    rm -f "/etc/nginx/sites-available/$conf" "/etc/nginx/sites-enabled/$conf"
+done
+systemctl reload nginx 2>/dev/null
+echo -e "${GREEN}✅ Nginx конфиги удалены${NC}"
 
 # Удаляем Docker образ
 echo -e "${CYAN}▶ Удаляем Docker образ...${NC}"

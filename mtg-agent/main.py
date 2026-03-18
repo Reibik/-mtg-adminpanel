@@ -79,9 +79,14 @@ def get_traffic(container) -> dict:
         return {"rx": "—", "tx": "—", "rx_bytes": 0, "tx_bytes": 0}
 
 
+@app.get("/version")
+def version():
+    return {"version": app.version}
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": app.version}
 
 
 @app.get("/metrics")
