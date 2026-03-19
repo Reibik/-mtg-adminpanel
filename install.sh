@@ -35,7 +35,7 @@ apt-get install -y -qq \
   git curl > /dev/null 2>&1
 
 if [ ! -d "$INSTALL_DIR" ]; then
-    git clone -q https://github.com/Reibik/-mtg-adminpanel.git "$INSTALL_DIR"
+    git clone -q https://github.com/Reibik/mtg-adminpanel.git "$INSTALL_DIR"
 fi
 
 if [ -f "$INSTALL_DIR/deploy.sh" ]; then

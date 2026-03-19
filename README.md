@@ -121,7 +121,7 @@
 ### Вариант 1: Автоматическая установка (рекомендуется)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Reibik/-mtg-adminpanel/main/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Reibik/mtg-adminpanel/main/deploy.sh | bash
 ```
 
 Скрипт `deploy.sh` автоматически:
@@ -135,7 +135,7 @@ curl -fsSL https://raw.githubusercontent.com/Reibik/-mtg-adminpanel/main/deploy.
 ### Вариант 2: Ручная установка
 
 ```bash
-git clone https://github.com/Reibik/-mtg-adminpanel.git /opt/mtg-adminpanel
+git clone https://github.com/Reibik/mtg-adminpanel.git /opt/mtg-adminpanel
 cd /opt/mtg-adminpanel
 cp .env.example .env
 nano .env  # Заполнить параметры
@@ -155,7 +155,7 @@ docker compose up -d --build
 3. Выполни на ноде:
 
 ```bash
-mkdir -p /opt/mtg-agent && cd /opt/mtg-agent && curl -fsSL https://raw.githubusercontent.com/Reibik/-mtg-adminpanel/main/mtg-agent/install-agent.sh | bash
+mkdir -p /opt/mtg-agent && cd /opt/mtg-agent && curl -fsSL https://raw.githubusercontent.com/Reibik/mtg-adminpanel/main/mtg-agent/install-agent.sh | bash
 ```
 
 4. В настройках ноды укажи **Порт агента**: `8081`
@@ -166,7 +166,7 @@ mkdir -p /opt/mtg-agent && cd /opt/mtg-agent && curl -fsSL https://raw.githubuse
 ```bash
 ssh root@your-node.com
 mkdir -p /opt/mtg-agent && cd /opt/mtg-agent
-wget -q https://raw.githubusercontent.com/Reibik/-mtg-adminpanel/main/mtg-agent/install-agent.sh -O install.sh
+wget -q https://raw.githubusercontent.com/Reibik/mtg-adminpanel/main/mtg-agent/install-agent.sh -O install.sh
 bash install.sh your-agent-token
 ```
 
@@ -177,7 +177,7 @@ bash install.sh your-agent-token
 Вручную:
 ```bash
 cd /opt/mtg-agent
-wget -q https://raw.githubusercontent.com/Reibik/-mtg-adminpanel/main/mtg-agent/main.py -O main.py
+wget -q https://raw.githubusercontent.com/Reibik/mtg-adminpanel/main/mtg-agent/main.py -O main.py
 docker compose down && docker compose up -d
 ```
 
