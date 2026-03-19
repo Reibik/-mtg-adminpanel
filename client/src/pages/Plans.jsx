@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { catalogApi, ordersApi, paymentsApi } from '../api/client';
+import { catalogApi, ordersApi, paymentsApi, balanceApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
-import { Zap, Globe, Check, Star, ShieldCheck, X } from 'lucide-react';
+import { Zap, Globe, Check, Star, ShieldCheck, X, Wallet, CreditCard } from 'lucide-react';
 import Spinner from '../components/ui/Spinner';
 
 export default function Plans() {
@@ -14,6 +14,7 @@ export default function Plans() {
   const [selectedLoc, setSelectedLoc] = useState('');
   const [ordering, setOrdering] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [balance, setBalance] = useState(0);
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -21,9 +22,11 @@ export default function Plans() {
     Promise.all([
       catalogApi.plans(),
       catalogApi.locations(),
-    ]).then(([p, l]) => {
+      balanceApi.get().catch(() => ({ data: { balance: 0 } })),
+    ]).then(([p, l, b]) => {
       setPlans(p.data || []);
       setLocations(l.data || []);
+      setBalance(b.data?.balance || 0);
     }).catch(() => {
       setError('Не удалось загрузить тарифы');
     }).finally(() => setLoading(false));
@@ -47,6 +50,23 @@ export default function Plans() {
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Ошибка при оформлении');
+    } finally { setOrdering(false); }
+  };
+
+  const handlePayBalance = async () => {
+    if (!selectedPlan) return;
+    setOrdering(true);
+    try {
+      const { data: order } = await ordersApi.create({
+        plan_id: selectedPlan.id,
+        location_flag: selectedLoc || undefined,
+      });
+      await ordersApi.payWithBalance(order.id);
+      toast.success('Оплата прошла успешно!');
+      setShowConfirm(false);
+      navigate('/proxies');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Ошибка оплаты с баланса');
     } finally { setOrdering(false); }
   };
 
@@ -178,15 +198,20 @@ export default function Plans() {
             </div>
 
             <p className="text-xs text-gray-500 text-center">
-              Нажимая «Перейти к оплате», вы соглашаетесь с условиями публичной оферты
+              Нажимая кнопку оплаты, вы соглашаетесь с условиями публичной оферты
             </p>
 
-            <div className="flex gap-3">
-              <button onClick={() => setShowConfirm(false)} className="btn-secondary flex-1">
-                Отмена
+            <div className="space-y-2">
+              {balance >= selectedPlan.price && (
+                <button onClick={handlePayBalance} disabled={ordering} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white transition bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50">
+                  {ordering ? <Spinner size="sm" /> : <><Wallet size={16} /> Оплатить с баланса ({balance} ₽)</>}
+                </button>
+              )}
+              <button onClick={() => { setShowConfirm(false); handleOrder(); }} disabled={ordering} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-white transition bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50">
+                {ordering ? <Spinner size="sm" /> : <><CreditCard size={16} /> Оплатить через ЮКассу</>}
               </button>
-              <button onClick={() => { setShowConfirm(false); handleOrder(); }} disabled={ordering} className="btn-primary flex-1 flex items-center justify-center gap-2">
-                {ordering ? <Spinner size="sm" /> : <><Zap size={16} /> Перейти к оплате</>}
+              <button onClick={() => setShowConfirm(false)} className="w-full btn-secondary">
+                Отмена
               </button>
             </div>
           </div>

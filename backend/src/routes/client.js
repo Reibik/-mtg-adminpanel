@@ -383,6 +383,44 @@ router.get('/locations', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// BALANCE
+// ═══════════════════════════════════════════════════════════
+
+router.get('/balance', auth.authCustomer, (req, res) => {
+  const customer = db.prepare('SELECT balance FROM customers WHERE id = ?').get(req.customer.id);
+  res.json({ balance: customer ? (customer.balance || 0) : 0 });
+});
+
+router.post('/balance/topup', auth.authCustomer, async (req, res) => {
+  const { amount } = req.body;
+  const num = Number(amount);
+  if (!num || num < 1 || num > 100000) return res.status(400).json({ error: 'Сумма от 1 до 100 000 ₽' });
+
+  try {
+    const payment = await yookassa.createPayment({
+      amount: num,
+      currency: 'RUB',
+      description: `Пополнение баланса — ST VILLAGE PROXY`,
+      orderId: `topup_${req.customer.id}_${Date.now()}`,
+      customerId: req.customer.id,
+    });
+
+    db.prepare(
+      `INSERT INTO payments (customer_id, order_id, yookassa_payment_id, amount, currency, status, description)
+       VALUES (?, NULL, ?, ?, 'RUB', 'pending', 'Пополнение баланса')`
+    ).run(req.customer.id, payment.id, num);
+
+    res.json({
+      payment_id: payment.id,
+      confirmation_url: payment.confirmation?.confirmation_url,
+    });
+  } catch (e) {
+    console.error('Balance topup error:', e);
+    res.status(500).json({ error: 'Ошибка создания платежа: ' + e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // ORDERS
 // ═══════════════════════════════════════════════════════════
 
@@ -426,6 +464,61 @@ router.post('/orders', auth.authCustomer, (req, res) => {
   );
 
   res.json({ id: result.lastInsertRowid, status: 'pending', price: plan.price, currency: plan.currency });
+});
+
+// ── Pay order from balance ────────────────────────────────
+router.post('/orders/:id/pay-balance', auth.authCustomer, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND customer_id = ?')
+    .get(req.params.id, req.customer.id);
+  if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+  if (order.status !== 'pending') return res.status(400).json({ error: 'Заказ уже оплачен или отменён' });
+
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.customer.id);
+  const balance = customer.balance || 0;
+  if (balance < order.price) {
+    return res.status(400).json({ error: `Недостаточно средств. На балансе: ${balance.toFixed(2)} ₽, нужно: ${order.price} ₽` });
+  }
+
+  try {
+    // Deduct balance
+    db.prepare('UPDATE customers SET balance = balance - ? WHERE id = ?').run(order.price, req.customer.id);
+
+    // Create payment record
+    db.prepare(
+      `INSERT INTO payments (customer_id, order_id, yookassa_payment_id, amount, currency, status, method, description, confirmed_at)
+       VALUES (?, ?, ?, ?, ?, 'succeeded', 'balance', ?, datetime('now'))`
+    ).run(req.customer.id, order.id, `balance_${order.id}_${Date.now()}`, order.price, order.currency,
+      db.prepare('SELECT name FROM plans WHERE id = ?').get(order.plan_id)?.name || `Заказ #${order.id}`);
+
+    // Activate order
+    await activateOrder(order);
+
+    // Send receipt email
+    if (customer.email && customer.email_verified) {
+      mailer.sendPaymentReceiptEmail(customer.email, {
+        amount: order.price,
+        currency: order.currency,
+        description: `Оплата с баланса`,
+        orderId: order.id,
+      }).catch(e => console.error('Receipt email error:', e));
+    }
+
+    // НПД receipt
+    if (nalog.isEnabled()) {
+      nalog.createReceipt({
+        amount: order.price,
+        customerName: customer.name || customer.email || customer.telegram_username || null,
+        description: 'Прокси-сервис (оплата с баланса)',
+        paymentDate: new Date().toISOString(),
+      }).catch(e => console.error('НПД receipt error:', e));
+    }
+
+    const updatedCustomer = db.prepare('SELECT balance FROM customers WHERE id = ?').get(req.customer.id);
+    res.json({ ok: true, new_balance: updatedCustomer.balance });
+  } catch (e) {
+    console.error('Balance pay error:', e);
+    res.status(500).json({ error: 'Ошибка при оплате: ' + e.message });
+  }
 });
 
 router.put('/orders/:id/auto-renew', auth.authCustomer, (req, res) => {
@@ -907,6 +1000,14 @@ async function processPaymentStatus(dbPayment, ykPayment) {
       return { status: 'succeeded', changed: false };
     }
 
+    // Balance top-up (no order_id)
+    if (!dbPayment.order_id) {
+      db.prepare('UPDATE customers SET balance = balance + ? WHERE id = ?')
+        .run(Number(dbPayment.amount), dbPayment.customer_id);
+      console.log(`💰 Balance topped up: customer #${dbPayment.customer_id} +${dbPayment.amount} ₽`);
+      return { status: 'succeeded', changed: true };
+    }
+
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(dbPayment.order_id);
     if (order && order.status === 'pending') {
       await activateOrder(order);
@@ -963,22 +1064,72 @@ async function checkPendingPayments() {
 async function processAutoRenewals() {
   const soon = new Date(Date.now() + 86400000).toISOString(); // 24h from now
   const orders = db.prepare(
-    `SELECT o.*, c.email, c.email_verified FROM orders o
+    `SELECT o.*, c.email, c.email_verified, c.balance, c.name as customer_name,
+            c.telegram_username, p.name as plan_name, p.price as plan_price
+     FROM orders o
      JOIN customers c ON o.customer_id = c.id
+     LEFT JOIN plans p ON o.plan_id = p.id
      WHERE o.auto_renew = 1 AND o.status = 'active'
      AND o.expires_at IS NOT NULL AND o.expires_at < datetime(?)`
   ).all(soon);
 
   for (const order of orders) {
     try {
-      // Send reminder email with payment link
-      if (order.email && order.email_verified) {
-        const daysLeft = Math.max(0, Math.ceil((new Date(order.expires_at) - Date.now()) / 86400000));
-        await mailer.sendSubscriptionExpiringEmail(order.email, {
-          daysLeft,
-          orderName: order.user_name || `Заказ #${order.id}`,
-        });
-        console.log(`📧 Auto-renewal reminder sent for order #${order.id}`);
+      const price = order.plan_price || order.price;
+      const balance = order.balance || 0;
+
+      if (balance >= price) {
+        // Auto-renew from balance
+        db.prepare('UPDATE customers SET balance = balance - ? WHERE id = ?').run(price, order.customer_id);
+
+        // Extend expiry
+        let newExpiry = new Date(order.expires_at);
+        const period = order.period || 'monthly';
+        if (period === 'daily') newExpiry.setDate(newExpiry.getDate() + 1);
+        else if (period === 'yearly') newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+        else newExpiry.setMonth(newExpiry.getMonth() + 1);
+
+        db.prepare('UPDATE orders SET expires_at = ? WHERE id = ?').run(newExpiry.toISOString(), order.id);
+        db.prepare('UPDATE users SET expires_at = ? WHERE node_id = ? AND name = ?')
+          .run(newExpiry.toISOString(), order.node_id, order.user_name);
+
+        // Create payment record
+        db.prepare(
+          `INSERT INTO payments (customer_id, order_id, yookassa_payment_id, amount, currency, status, method, description, confirmed_at)
+           VALUES (?, ?, ?, ?, ?, 'succeeded', 'balance', ?, datetime('now'))`
+        ).run(order.customer_id, order.id, `renewal_${order.id}_${Date.now()}`,
+          price, order.currency || 'RUB', `Автопродление: ${order.plan_name || order.user_name}`);
+
+        console.log(`🔄 Auto-renewed order #${order.id} from balance (${price} ₽)`);
+
+        // НПД receipt for auto-renewal
+        if (nalog.isEnabled()) {
+          nalog.createReceipt({
+            amount: price,
+            customerName: order.customer_name || order.email || order.telegram_username || null,
+            description: `Автопродление прокси (с баланса)`,
+            paymentDate: new Date().toISOString(),
+          }).catch(e => console.error('НПД receipt error:', e));
+        }
+
+        if (order.email && order.email_verified) {
+          mailer.sendPaymentReceiptEmail(order.email, {
+            amount: price,
+            currency: order.currency || 'RUB',
+            description: `Автопродление: ${order.plan_name || order.user_name}`,
+            orderId: order.id,
+          }).catch(e => console.error('Renewal receipt email error:', e));
+        }
+      } else {
+        // Not enough balance — send reminder
+        if (order.email && order.email_verified) {
+          const daysLeft = Math.max(0, Math.ceil((new Date(order.expires_at) - Date.now()) / 86400000));
+          await mailer.sendSubscriptionExpiringEmail(order.email, {
+            daysLeft,
+            orderName: order.user_name || `Заказ #${order.id}`,
+          });
+          console.log(`📧 Auto-renewal reminder sent for order #${order.id} (balance ${balance} < ${price} ₽)`);
+        }
       }
     } catch (e) {
       console.error(`Auto-renewal error for order #${order.id}:`, e.message);

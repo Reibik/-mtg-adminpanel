@@ -96,6 +96,7 @@ export const ordersApi = {
   create: (data) => api.post('/orders', data),
   toggleAutoRenew: (id, enabled) => api.put(`/orders/${id}/auto-renew`, { enabled }),
   remove: (id) => api.delete(`/orders/${id}`),
+  payWithBalance: (id) => api.post(`/orders/${id}/pay-balance`),
 };
 
 // ── Proxies ───────────────────────────────────────────────
@@ -104,6 +105,12 @@ export const proxiesApi = {
   stats: (orderId) => api.get(`/proxies/${orderId}/stats`),
   history: (orderId) => api.get(`/proxies/${orderId}/history`),
   ping: (orderId) => api.get(`/proxies/${orderId}/ping`),
+};
+
+// ── Balance ───────────────────────────────────────────────
+export const balanceApi = {
+  get: () => api.get('/balance'),
+  topup: (amount) => api.post('/balance/topup', { amount }),
 };
 
 // ── Payments ──────────────────────────────────────────────

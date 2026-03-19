@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ordersApi, proxiesApi, paymentsApi, profileApi } from '../api/client';
-import { Wifi, CreditCard, Activity, ArrowRight, Globe, Clock, Shield, BarChart3, Zap, TrendingUp, CalendarDays, RefreshCw } from 'lucide-react';
+import { ordersApi, proxiesApi, paymentsApi, profileApi, balanceApi } from '../api/client';
+import { Wifi, CreditCard, Activity, ArrowRight, Globe, Clock, Shield, BarChart3, Zap, TrendingUp, CalendarDays, RefreshCw, Wallet, Plus, X } from 'lucide-react';
 import Spinner from '../components/ui/Spinner';
+import { useToast } from '../components/ui/Toast';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -20,7 +21,12 @@ export default function Dashboard() {
   const [proxyPings, setProxyPings] = useState({});
   const [lastUpdate, setLastUpdate] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [showTopup, setShowTopup] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupLoading, setTopupLoading] = useState(false);
   const intervalRef = useRef(null);
+  const toast = useToast();
 
   const fetchData = useCallback((silent = false) => {
     if (!silent) setRefreshing(true);
@@ -29,7 +35,9 @@ export default function Dashboard() {
       proxiesApi.list().catch(() => ({ data: [] })),
       paymentsApi.list().catch(() => ({ data: [] })),
       profileApi.get().catch(() => ({ data: {} })),
-    ]).then(([orders, proxies, payments, profile]) => {
+      balanceApi.get().catch(() => ({ data: { balance: 0 } })),
+    ]).then(([orders, proxies, payments, profile, bal]) => {
+      setBalance(bal.data?.balance || 0);
       const allOrders = orders.data || [];
       const active = allOrders.filter(o => o.status === 'active');
       const pending = allOrders.filter(o => o.status === 'pending');
@@ -101,6 +109,22 @@ export default function Dashboard() {
     });
   }, []);
 
+  const handleTopup = async () => {
+    const amount = Number(topupAmount);
+    if (!amount || amount < 1) { toast.error('Минимум 1 ₽'); return; }
+    setTopupLoading(true);
+    try {
+      const { data } = await balanceApi.topup(amount);
+      if (data.confirmation_url) {
+        window.location.href = data.confirmation_url;
+      } else {
+        toast.error('Не удалось создать платёж');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Ошибка');
+    } finally { setTopupLoading(false); }
+  };
+
   useEffect(() => {
     fetchData();
     intervalRef.current = setInterval(() => fetchData(true), 30000);
@@ -153,8 +177,6 @@ export default function Dashboard() {
     { icon: CreditCard, label: 'Потрачено всего', value: `${s.totalSpent.toLocaleString()} ₽`, color: 'text-accent', bg: 'bg-accent/10' },
     { icon: Activity, label: 'Всего заказов', value: s.totalOrders, color: 'text-success', bg: 'bg-success/10' },
     { icon: Clock, label: 'До продления', value: s.daysUntilExpiry !== null ? `${s.daysUntilExpiry} дн.` : '—', color: 'text-warning', bg: 'bg-warning/10' },
-    { icon: TrendingUp, label: 'Средний чек', value: `${s.avgOrderPrice.toLocaleString()} ₽`, color: 'text-primary', bg: 'bg-primary/10' },
-    { icon: Shield, label: 'Ожидают оплаты', value: s.pendingOrders, color: 'text-danger', bg: 'bg-danger/10' },
   ];
 
   return (
@@ -183,7 +205,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards + Balance */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map(c => (
           <div key={c.label} className="card flex items-center gap-4">
@@ -196,7 +218,70 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+
+        {/* Balance card */}
+        <div className="card col-span-2 lg:col-span-2 relative overflow-hidden"
+          style={{background: 'linear-gradient(135deg, rgba(124,111,247,0.15), rgba(99,102,241,0.08))'}}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                <Wallet size={24} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Баланс</p>
+                <p className="text-2xl font-black gradient-text">{balance.toFixed(2)} ₽</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Используется для автопродления прокси</p>
+              </div>
+            </div>
+            <button onClick={() => { setShowTopup(true); setTopupAmount(''); }}
+              className="btn-primary btn-sm flex items-center gap-1.5">
+              <Plus size={14} /> Пополнить
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Topup modal */}
+      {showTopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setShowTopup(false)}>
+          <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-sm p-6 space-y-5 animate-fade-in"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Wallet size={20} className="text-primary" /> Пополнение баланса
+              </h2>
+              <button onClick={() => setShowTopup(false)}
+                className="p-1.5 text-gray-500 hover:text-gray-300 transition rounded-lg hover:bg-white/10">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-400 mb-3">Средства будут использоваться для автопродления прокси</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {[100, 200, 500, 1000].map(v => (
+                  <button key={v} onClick={() => setTopupAmount(String(v))}
+                    className={`px-4 py-2 rounded-xl text-sm transition ${String(v) === topupAmount ? 'bg-primary text-white' : 'bg-surface-light text-gray-300 hover:bg-surface-lighter'}`}>
+                    {v} ₽
+                  </button>
+                ))}
+              </div>
+              <input type="number" min="1" max="100000" placeholder="Или введите сумму..."
+                value={topupAmount} onChange={e => setTopupAmount(e.target.value)}
+                className="input w-full" />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setShowTopup(false)} className="btn-secondary flex-1">Отмена</button>
+              <button onClick={handleTopup} disabled={topupLoading || !topupAmount}
+                className="btn-primary flex-1 flex items-center justify-center gap-2">
+                {topupLoading ? <Spinner size="sm" /> : <><CreditCard size={16} /> Оплатить</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Spending chart */}
