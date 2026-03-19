@@ -23,9 +23,37 @@ export default function PaymentResult() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('order_id');
+  const isTopup = searchParams.get('topup') === '1';
+  const topupAmount = searchParams.get('amount');
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (isTopup) {
+    return (
+      <PageWrapper>
+        <div className="card w-full max-w-md text-center space-y-6 animate-fade-in">
+          <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto">
+            <CheckCircle size={32} className="text-success" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Баланс пополнен!</h1>
+            <p className="text-gray-400">
+              {topupAmount ? `+${topupAmount} ₽ зачислено на ваш баланс` : 'Средства зачислены на ваш баланс'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Link to="/dashboard" className="btn-primary flex items-center justify-center gap-2">
+              <ArrowRight size={16} /> Перейти в дашборд
+            </Link>
+            <Link to="/plans" className="btn-secondary flex items-center justify-center gap-2">
+              <CreditCard size={16} /> Выбрать тариф
+            </Link>
+          </div>
+        </div>
+      </PageWrapper>
+    );
   }
 
   return <PaymentResultInner orderId={orderId} />;

@@ -397,12 +397,14 @@ router.post('/balance/topup', auth.authCustomer, async (req, res) => {
   if (!num || num < 1 || num > 100000) return res.status(400).json({ error: 'Сумма от 1 до 100 000 ₽' });
 
   try {
+    const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
     const payment = await yookassa.createPayment({
       amount: num,
       currency: 'RUB',
       description: `Пополнение баланса — ST VILLAGE PROXY`,
       orderId: `topup_${req.customer.id}_${Date.now()}`,
       customerId: req.customer.id,
+      returnUrl: `${SITE_URL}/payment/result?topup=1&amount=${num}`,
     });
 
     db.prepare(
