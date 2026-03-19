@@ -234,7 +234,7 @@ export default function Dashboard() {
               Все <ArrowRight size={12} />
             </Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-white/5">
@@ -260,6 +260,20 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="sm:hidden space-y-3">
+            {s.recentPayments.map(p => (
+              <div key={p.id} className="bg-surface-light rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-sm">{Number(p.amount).toLocaleString()} ₽</p>
+                  <p className="text-xs text-gray-500">{new Date(p.created_at).toLocaleDateString('ru')}</p>
+                </div>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  p.status === 'succeeded' ? 'bg-success/10 text-success' :
+                  p.status === 'pending' ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'
+                }`}>{p.status === 'succeeded' ? 'Оплачен' : p.status === 'pending' ? 'Ожидание' : 'Отменён'}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

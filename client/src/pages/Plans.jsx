@@ -9,6 +9,7 @@ export default function Plans() {
   const [plans, setPlans] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedLoc, setSelectedLoc] = useState('');
   const [ordering, setOrdering] = useState(false);
@@ -23,6 +24,8 @@ export default function Plans() {
     ]).then(([p, l]) => {
       setPlans(p.data || []);
       setLocations(l.data || []);
+    }).catch(() => {
+      setError('Не удалось загрузить тарифы');
     }).finally(() => setLoading(false));
   }, []);
 
@@ -48,6 +51,14 @@ export default function Plans() {
   };
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
+
+  if (error) return (
+    <div className="card text-center py-12">
+      <Zap size={48} className="mx-auto text-gray-600 mb-4" />
+      <p className="text-lg font-semibold text-danger">{error}</p>
+      <button onClick={() => { setError(''); setLoading(true); window.location.reload(); }} className="btn-secondary mt-4">Попробовать снова</button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

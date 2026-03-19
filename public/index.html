@@ -756,7 +756,7 @@ function Login({ onLogin }) {
       });
       const data = await res.json();
       if(!res.ok) throw new Error(data.error||'Ошибка');
-      const userToken = 'user:'+username;
+      const userToken = data.sessionToken || ('user:'+username);
       setToken(userToken);
       setAdminRole(data.role);
       toast(`Вход: ${data.display_name||username} (${data.role})`,'success');

@@ -216,13 +216,17 @@ router.post('/auth/forgot-password', async (req, res) => {
     return res.status(429).json({ error: 'Слишком много попыток' });
   }
 
-  const customer = db.prepare('SELECT * FROM customers WHERE email = ?').get(email.toLowerCase().trim());
-  if (customer) {
-    const token = auth.generateEmailToken();
-    const expires = new Date(Date.now() + 3600000).toISOString(); // 1h
-    db.prepare('UPDATE customers SET email_verify_token = ?, email_verify_expires = ? WHERE id = ?')
-      .run(token, expires, customer.id);
-    await mailer.sendPasswordResetEmail(email, token);
+  try {
+    const customer = db.prepare('SELECT * FROM customers WHERE email = ?').get(email.toLowerCase().trim());
+    if (customer) {
+      const token = auth.generateEmailToken();
+      const expires = new Date(Date.now() + 3600000).toISOString(); // 1h
+      db.prepare('UPDATE customers SET email_verify_token = ?, email_verify_expires = ? WHERE id = ?')
+        .run(token, expires, customer.id);
+      await mailer.sendPasswordResetEmail(email, token);
+    }
+  } catch (e) {
+    console.error('Forgot password error:', e.message);
   }
   // Don't reveal if email exists
   res.json({ ok: true, message: 'Если email зарегистрирован, вы получите письмо' });
@@ -239,7 +243,7 @@ router.post('/auth/reset-password', async (req, res) => {
   if (!customer) return res.status(400).json({ error: 'Токен истёк или невалиден' });
 
   const hash = await auth.hashPassword(password);
-  db.prepare('UPDATE customers SET password_hash = ?, email_verify_token = NULL, email_verify_expires = NULL WHERE id = ?')
+  db.prepare('UPDATE customers SET password_hash = ?, email_verified = 1, email_verify_token = NULL, email_verify_expires = NULL WHERE id = ?')
     .run(hash, customer.id);
 
   res.json({ ok: true, message: 'Пароль изменён. Можете войти.' });
@@ -549,7 +553,9 @@ router.get('/proxies/:orderId/ping', auth.authCustomer, async (req, res) => {
     const start = Date.now();
     await new Promise((resolve, reject) => {
       const net = require('net');
-      const sock = net.createConnection({ host: node.host, port: node.port || 22, timeout: 5000 }, () => {
+      const user = db.prepare('SELECT port FROM users WHERE node_id = ? AND name = ?').get(order.node_id, order.user_name);
+      const proxyPort = user ? user.port : 443;
+      const sock = net.createConnection({ host: node.host, port: proxyPort, timeout: 5000 }, () => {
         sock.destroy();
         resolve();
       });
@@ -743,7 +749,7 @@ router.get('/announcements', (req, res) => {
 // ═══════════════════════════════════════════════════════════
 
 router.post('/webhook/yookassa', async (req, res) => {
-  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  const clientIp = req.ip || req.socket.remoteAddress || '';
   if (!yookassa.isWebhookTrusted(clientIp)) {
     console.warn(`⚠️ Untrusted webhook IP: ${clientIp}`);
     return res.status(403).json({ error: 'Forbidden' });
@@ -760,29 +766,10 @@ router.post('/webhook/yookassa', async (req, res) => {
       return res.json({ ok: true }); // acknowledge to prevent retries
     }
 
-    if (event === 'payment.succeeded') {
-      db.prepare(
-        "UPDATE payments SET status = 'succeeded', method = ?, confirmed_at = datetime('now') WHERE id = ?"
-      ).run(object.payment_method?.type || 'unknown', dbPayment.id);
-
-      // Activate order
-      const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(dbPayment.order_id);
-      if (order && order.status === 'pending') {
-        await activateOrder(order);
-      }
-
-      // Send receipt email
-      const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(dbPayment.customer_id);
-      if (customer && customer.email && customer.email_verified) {
-        mailer.sendPaymentReceiptEmail(customer.email, {
-          amount: dbPayment.amount,
-          currency: dbPayment.currency,
-          description: dbPayment.description,
-          orderId: dbPayment.order_id,
-        }).catch(e => console.error('Receipt email error:', e));
-      }
-    } else if (event === 'payment.canceled') {
-      db.prepare("UPDATE payments SET status = 'cancelled' WHERE id = ?").run(dbPayment.id);
+    // Use shared processPaymentStatus (handles activation, email, НПД, race-safe)
+    const result = await processPaymentStatus(dbPayment, object);
+    if (result.changed) {
+      console.log(`  💰 Webhook: Payment #${dbPayment.id} → ${result.status}`);
     }
 
     res.json({ ok: true });
@@ -903,15 +890,22 @@ function sanitizeCustomer(c) {
     balance: c.balance || 0,
     status: c.status,
     created_at: c.created_at,
+    has_password: !!c.password_hash,
   };
 }
 
 // ── Process payment status from YooKassa ──────────────────
 async function processPaymentStatus(dbPayment, ykPayment) {
   if (ykPayment.status === 'succeeded' && dbPayment.status === 'pending') {
-    db.prepare(
-      "UPDATE payments SET status = 'succeeded', method = ?, confirmed_at = datetime('now') WHERE id = ?"
+    // Atomic update with race condition protection
+    const updated = db.prepare(
+      "UPDATE payments SET status = 'succeeded', method = ?, confirmed_at = datetime('now') WHERE id = ? AND status = 'pending'"
     ).run(ykPayment.payment_method?.type || 'unknown', dbPayment.id);
+
+    // If no rows updated, another process already handled this payment
+    if (updated.changes === 0) {
+      return { status: 'succeeded', changed: false };
+    }
 
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(dbPayment.order_id);
     if (order && order.status === 'pending') {

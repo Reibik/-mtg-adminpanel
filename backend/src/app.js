@@ -134,8 +134,45 @@ app.post('/api/admin/login', async (req, res) => {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Неверный логин или пароль' });
   db.prepare("UPDATE admin_users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
-  res.json({ role: user.role, display_name: user.display_name || user.username });
+  const sessionToken = createAdminSessionToken(username, user.role);
+  res.json({ role: user.role, display_name: user.display_name || user.username, sessionToken });
 });
+
+// ── Admin session tokens (HMAC-signed) ────────────────────
+const crypto = require('crypto');
+const ADMIN_SESSION_SECRET = (process.env.JWT_SECRET || AUTH_TOKEN) + ':admin-session';
+const adminSessions = new Map(); // token -> { username, role, createdAt }
+
+function createAdminSessionToken(username, role) {
+  const payload = `${username}:${role}:${Date.now()}`;
+  const hmac = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(payload).digest('hex');
+  const token = `session:${Buffer.from(payload).toString('base64')}.${hmac}`;
+  adminSessions.set(token, { username, role, createdAt: Date.now() });
+  return token;
+}
+
+function verifyAdminSessionToken(token) {
+  if (!token || !token.startsWith('session:')) return null;
+  const session = adminSessions.get(token);
+  if (!session) return null;
+  // Sessions expire after 24h
+  if (Date.now() - session.createdAt > 24 * 60 * 60 * 1000) {
+    adminSessions.delete(token);
+    return null;
+  }
+  // Verify user still active
+  const user = db.prepare('SELECT * FROM admin_users WHERE username = ? AND status = ?').get(session.username, 'active');
+  if (!user) { adminSessions.delete(token); return null; }
+  return { user, role: session.role };
+}
+
+// Cleanup expired sessions every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of adminSessions) {
+    if (now - session.createdAt > 24 * 60 * 60 * 1000) adminSessions.delete(token);
+  }
+}, 3600000);
 
 // ── Auth middleware (admin) ────────────────────────────────
 app.use('/api', (req, res, next) => {
@@ -152,16 +189,12 @@ app.use('/api', (req, res, next) => {
     return next();
   }
 
-  // Check if token matches an admin user's username (for role-based sessions)
-  // Admin users send "user:<username>" as token after login
-  if (token && token.startsWith('user:')) {
-    const username = token.slice(5);
-    const user = db.prepare('SELECT * FROM admin_users WHERE username = ? AND status = ?').get(username, 'active');
-    if (user) {
-      req.adminRole = user.role;
-      req.adminUser = user;
-      return next();
-    }
+  // Verify HMAC-signed session token
+  const session = verifyAdminSessionToken(token);
+  if (session) {
+    req.adminRole = session.role;
+    req.adminUser = session.user;
+    return next();
   }
 
   return res.status(401).json({ error: 'Unauthorized' });
@@ -822,14 +855,17 @@ async function recordHistory() {
 
 async function cleanExpiredUsers() {
   const expired = db.prepare(
-    "SELECT u.*, n.* FROM users u JOIN nodes n ON u.node_id=n.id WHERE u.expires_at IS NOT NULL AND u.expires_at < datetime('now')"
+    "SELECT u.id as user_id, u.name as user_name, u.node_id, u.port, u.secret, u.status, u.expires_at FROM users u WHERE u.expires_at IS NOT NULL AND u.expires_at < datetime('now')"
   ).all();
   for (const u of expired) {
     try {
-      await ssh.removeRemoteUser(db.prepare('SELECT * FROM nodes WHERE id=?').get(u.node_id), u.name);
-      db.prepare('DELETE FROM users WHERE id=?').run(u.id);
-      console.log(`🗑️ Auto-deleted expired user: ${u.name} on node ${u.node_id}`);
-    } catch (e) { console.error(`Failed to delete expired user ${u.name}:`, e.message); }
+      const node = db.prepare('SELECT * FROM nodes WHERE id=?').get(u.node_id);
+      if (node) await ssh.removeRemoteUser(node, u.user_name);
+      db.prepare('DELETE FROM users WHERE id=?').run(u.user_id);
+      // Mark corresponding orders as expired
+      db.prepare("UPDATE orders SET status = 'expired' WHERE node_id = ? AND user_name = ? AND status = 'active'").run(u.node_id, u.user_name);
+      console.log(`🗑️ Auto-deleted expired user: ${u.user_name} on node ${u.node_id}`);
+    } catch (e) { console.error(`Failed to delete expired user ${u.user_name}:`, e.message); }
   }
 }
 

@@ -96,16 +96,16 @@ export default function ProxyDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 flex-wrap">
         <Link to="/proxies" className="btn-secondary p-2"><ArrowLeft size={18} /></Link>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <span className="text-2xl">{order.node_flag || '🌐'}</span>
-            {order.plan_name || `Заказ #${order.id}`}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <span className="text-xl sm:text-2xl">{order.node_flag || '🌐'}</span>
+            <span className="truncate">{order.plan_name || `Заказ #${order.id}`}</span>
           </h1>
           <p className="text-sm text-gray-400">ID: {order.id}</p>
         </div>
-        <span className={`ml-auto ${order.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+        <span className={`shrink-0 ${order.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
           {order.status === 'active' ? 'Активен' : order.status}
         </span>
       </div>

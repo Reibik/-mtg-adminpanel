@@ -29,6 +29,7 @@ const faqs = [
 export default function Landing() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
   const [version, setVersion] = useState('');
   const [announcements, setAnnouncements] = useState([]);
@@ -37,7 +38,7 @@ export default function Landing() {
   });
 
   useEffect(() => {
-    catalogApi.plans().then(({ data }) => setPlans(data)).catch(() => {});
+    catalogApi.plans().then(({ data }) => setPlans(data)).catch(() => {}).finally(() => setPlansLoading(false));
     axios.get('/api/version').then(r => setVersion(r.data.version || '')).catch(() => {});
     axios.get('/api/client/announcements').then(r => setAnnouncements(r.data || [])).catch(() => {});
   }, []);
@@ -159,7 +160,12 @@ export default function Landing() {
           <h2 className="text-3xl font-bold text-center mb-4">Тарифные планы</h2>
           <p className="text-center text-gray-400 mb-12">Выберите подходящий план или настройте под себя</p>
           <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {plans.length === 0 && (
+            {plansLoading && (
+              <div className="col-span-3 flex justify-center py-12">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {!plansLoading && plans.length === 0 && (
               <div className="col-span-3 text-center text-gray-500 py-12">
                 Тарифы скоро появятся. Следите за обновлениями!
               </div>

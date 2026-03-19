@@ -73,6 +73,13 @@ function PaymentResultInner({ orderId }) {
     else setStatus('failed');
   }, [orderId]);
 
+  // Auto-poll when pending
+  useEffect(() => {
+    if (status !== 'pending') return;
+    const interval = setInterval(() => { checkPayment(); }, 5000);
+    return () => clearInterval(interval);
+  }, [status, orderId]);
+
   const handleRetryCheck = async () => {
     setChecking(true);
     await checkPayment();
@@ -164,7 +171,9 @@ function PaymentResultInner({ orderId }) {
       if (data.confirmation_url) {
         window.location.href = data.confirmation_url;
       }
-    } catch {}
+    } catch (err) {
+      console.error('Retry error:', err);
+    }
     setRetrying(false);
   };
 

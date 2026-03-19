@@ -167,7 +167,7 @@ export default function Profile() {
             <label className="text-xs text-gray-400 mb-1 block">Telegram</label>
             <div className="flex items-center gap-2">
               <input readOnly value={`@${customer.telegram_username || customer.telegram_id}`} className="input flex-1 opacity-70" />
-              {customer?.email && customer?.password_hash !== undefined && (
+              {customer?.email && customer?.has_password && (
                 <button
                   onClick={async () => {
                     if (!confirm('Отвязать Telegram? Вы сможете входить только по email и паролю.')) return;

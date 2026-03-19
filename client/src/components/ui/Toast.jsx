@@ -31,7 +31,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={toast}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] space-y-2 max-w-sm">
+      <div className="fixed bottom-20 lg:bottom-4 right-4 z-[100] space-y-2 max-w-sm">
         {toasts.map(t => (
           <div key={t.id} className="flex items-center gap-3 bg-surface border border-white/10 rounded-xl px-4 py-3 shadow-xl animate-slide-up">
             {icons[t.type]}

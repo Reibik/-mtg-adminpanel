@@ -11,6 +11,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [needVerify, setNeedVerify] = useState(false);
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       const { data } = await authApi.login({ email, password });
@@ -40,7 +42,8 @@ export default function Login() {
   const handleResend = async () => {
     try {
       await authApi.resendVerification({ email });
-      setError('Письмо отправлено повторно. Проверьте почту.');
+      setSuccess('Письмо отправлено повторно. Проверьте почту.');
+      setError('');
       setNeedVerify(false);
     } catch { setError('Ошибка при отправке'); }
   };
@@ -87,6 +90,12 @@ export default function Login() {
                     Отправить письмо повторно
                   </button>
                 )}
+              </div>
+            )}
+
+            {success && (
+              <div className="text-sm text-success bg-success/10 rounded-lg px-3 py-2">
+                {success}
               </div>
             )}
 
