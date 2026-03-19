@@ -255,6 +255,48 @@ app.post('/api/totp/disable', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── НПД (Мой налог) settings ─────────────────────────────
+const nalog = require('./nalog');
+
+app.get('/api/npd/settings', (req, res) => {
+  const keys = ['npd_enabled', 'npd_inn', 'npd_password'];
+  const result = {};
+  for (const key of keys) {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+    result[key] = row ? row.value : '';
+  }
+  // Маскируем пароль в ответе
+  if (result.npd_password) result.npd_password = '••••••••';
+  res.json(result);
+});
+
+app.post('/api/npd/settings', (req, res) => {
+  const { npd_enabled, npd_inn, npd_password } = req.body;
+  if (npd_inn !== undefined) {
+    const sanitized = String(npd_inn).replace(/\D/g, '');
+    if (sanitized && sanitized.length !== 12) {
+      return res.status(400).json({ error: 'ИНН должен содержать 12 цифр' });
+    }
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_inn', ?)").run(sanitized);
+  }
+  if (npd_password !== undefined && npd_password !== '••••••••') {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_password', ?)").run(npd_password);
+  }
+  if (npd_enabled !== undefined) {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_enabled', ?)").run(npd_enabled ? '1' : '0');
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/npd/test', async (req, res) => {
+  try {
+    const result = await nalog.testConnection();
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ── Nodes ─────────────────────────────────────────────────
 app.get('/api/nodes', (req, res) => {
   res.json(db.prepare('SELECT id, name, host, ssh_user, ssh_port, base_dir, start_port, created_at, flag, agent_port FROM nodes').all());

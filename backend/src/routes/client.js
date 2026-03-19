@@ -5,6 +5,7 @@ const auth = require('../auth-customer');
 const mailer = require('../mailer');
 const yookassa = require('../yookassa');
 const ssh = require('../ssh');
+const nalog = require('../nalog');
 
 // ── Rate limiting (simple in-memory) ──────────────────────
 const rateLimits = {};
@@ -925,6 +926,16 @@ async function processPaymentStatus(dbPayment, ykPayment) {
         description: dbPayment.description,
         orderId: dbPayment.order_id,
       }).catch(e => console.error('Receipt email error:', e));
+    }
+
+    // НПД: авто-отправка чека самозанятого
+    if (nalog.isEnabled()) {
+      nalog.createReceipt({
+        amount: dbPayment.amount,
+        customerName: customer ? (customer.name || customer.email || customer.telegram_username || null) : null,
+        description: dbPayment.description || 'Прокси-сервис',
+        paymentDate: new Date().toISOString(),
+      }).catch(e => console.error('НПД receipt error:', e));
     }
 
     return { status: 'succeeded', changed: true };
