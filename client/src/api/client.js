@@ -95,6 +95,7 @@ export const ordersApi = {
   get: (id) => api.get(`/orders/${id}`),
   create: (data) => api.post('/orders', data),
   toggleAutoRenew: (id, enabled) => api.put(`/orders/${id}/auto-renew`, { enabled }),
+  remove: (id) => api.delete(`/orders/${id}`),
 };
 
 // ── Proxies ───────────────────────────────────────────────
@@ -110,6 +111,7 @@ export const paymentsApi = {
   create: (data) => api.post('/payments/create', data),
   list: () => api.get('/payments'),
   check: (id) => api.post(`/payments/${id}/check`),
+  retry: (id) => api.post(`/payments/${id}/retry`),
 };
 
 // ── Changelog ─────────────────────────────────────────────

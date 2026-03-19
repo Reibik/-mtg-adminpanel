@@ -32,6 +32,7 @@ export default function App() {
   return (
     <ToastProvider>
     <BrowserRouter>
+      <div className="animate-app-enter">
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
@@ -57,6 +58,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      </div>
     </BrowserRouter>
     </ToastProvider>
   );

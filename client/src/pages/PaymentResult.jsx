@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { paymentsApi, ordersApi } from '../api/client';
-import { CheckCircle, XCircle, Clock, Wifi, CreditCard, ArrowRight, RefreshCw, Zap } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Wifi, CreditCard, ArrowRight, RefreshCw, Zap, RotateCcw } from 'lucide-react';
 import Spinner from '../components/ui/Spinner';
 
 function PageWrapper({ children }) {
@@ -36,6 +36,7 @@ function PaymentResultInner({ orderId }) {
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const checkPayment = async () => {
     try {
@@ -155,6 +156,18 @@ function PaymentResultInner({ orderId }) {
     );
   }
 
+  const handleRetryPayment = async () => {
+    if (!payment) return;
+    setRetrying(true);
+    try {
+      const { data } = await paymentsApi.retry(payment.id);
+      if (data.confirmation_url) {
+        window.location.href = data.confirmation_url;
+      }
+    } catch {}
+    setRetrying(false);
+  };
+
   return (
     <PageWrapper>
       <div className="card text-center max-w-md w-full py-10 space-y-6">
@@ -167,8 +180,13 @@ function PaymentResultInner({ orderId }) {
         </div>
 
         <div className="flex flex-col gap-3">
-          <Link to="/plans" className="btn-primary w-full">
-            <ArrowRight size={16} /> Попробовать снова
+          {payment && (
+            <button onClick={handleRetryPayment} disabled={retrying} className="btn-primary w-full">
+              {retrying ? <Spinner size="sm" /> : <><RotateCcw size={16} /> Повторить оплату</>}
+            </button>
+          )}
+          <Link to="/plans" className="btn-secondary w-full">
+            <ArrowRight size={16} /> Выбрать другой тариф
           </Link>
           <Link to="/payments" className="btn-secondary w-full">
             <CreditCard size={16} /> Мои платежи

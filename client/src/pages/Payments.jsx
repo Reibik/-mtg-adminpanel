@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { paymentsApi } from '../api/client';
-import { CreditCard, CheckCircle, XCircle, Clock, Filter, RefreshCw } from 'lucide-react';
+import { CreditCard, CheckCircle, XCircle, Clock, Filter, RefreshCw, RotateCcw } from 'lucide-react';
 import Spinner from '../components/ui/Spinner';
 
 const statusMap = {
@@ -15,6 +15,7 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [checking, setChecking] = useState(null);
+  const [retrying, setRetrying] = useState(null);
 
   const loadPayments = () => {
     paymentsApi.list().then(({ data }) => setPayments(data || []))
@@ -32,6 +33,17 @@ export default function Payments() {
       }
     } catch {}
     setChecking(null);
+  };
+
+  const handleRetry = async (paymentId) => {
+    setRetrying(paymentId);
+    try {
+      const { data } = await paymentsApi.retry(paymentId);
+      if (data.confirmation_url) {
+        window.location.href = data.confirmation_url;
+      }
+    } catch {}
+    setRetrying(null);
   };
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
@@ -97,6 +109,13 @@ export default function Payments() {
                           className="text-xs px-3 py-1 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition inline-flex items-center gap-1 disabled:opacity-50">
                           <RefreshCw size={12} className={checking === p.id ? 'animate-spin' : ''} />
                           Проверить
+                        </button>
+                      )}
+                      {(p.status === 'canceled' || p.status === 'cancelled') && (
+                        <button onClick={() => handleRetry(p.id)} disabled={retrying === p.id}
+                          className="text-xs px-3 py-1 rounded-lg bg-warning/20 text-warning hover:bg-warning/30 transition inline-flex items-center gap-1 disabled:opacity-50">
+                          <RotateCcw size={12} className={retrying === p.id ? 'animate-spin' : ''} />
+                          Повторить
                         </button>
                       )}
                     </td>

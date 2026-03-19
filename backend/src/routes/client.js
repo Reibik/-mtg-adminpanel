@@ -433,6 +433,42 @@ router.put('/orders/:id/auto-renew', auth.authCustomer, (req, res) => {
   res.json({ ok: true, auto_renew: enabled ? 1 : 0 });
 });
 
+// ── Delete (cancel) order and remove proxy ────────────────
+router.delete('/orders/:id', auth.authCustomer, async (req, res) => {
+  const order = db.prepare(
+    'SELECT * FROM orders WHERE id = ? AND customer_id = ?'
+  ).get(req.params.id, req.customer.id);
+  if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+
+  if (order.status === 'cancelled' || order.status === 'canceled') {
+    return res.status(400).json({ error: 'Заказ уже отменён' });
+  }
+
+  try {
+    // Remove proxy from node if active
+    if (order.status === 'active' && order.node_id && order.user_name) {
+      const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(order.node_id);
+      if (node) {
+        try {
+          await ssh.removeRemoteUser(node, order.user_name);
+        } catch (e) {
+          console.error(`Failed to remove proxy ${order.user_name} from node:`, e.message);
+        }
+      }
+      // Remove from users table
+      db.prepare('DELETE FROM users WHERE node_id = ? AND name = ?').run(order.node_id, order.user_name);
+    }
+
+    // Cancel the order
+    db.prepare("UPDATE orders SET status = 'cancelled', auto_renew = 0 WHERE id = ?").run(order.id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(`Delete order #${order.id} error:`, e.message);
+    res.status(500).json({ error: 'Ошибка при удалении прокси' });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 // PROXIES (customer's active connections)
 // ═══════════════════════════════════════════════════════════
@@ -571,6 +607,67 @@ router.get('/payments', auth.authCustomer, (req, res) => {
      WHERE p.customer_id = ? ORDER BY p.created_at DESC`
   ).all(req.customer.id);
   res.json(payments);
+});
+
+// ── Retry failed payment ──────────────────────────────────
+router.post('/payments/:id/retry', auth.authCustomer, async (req, res) => {
+  const payment = db.prepare(
+    'SELECT * FROM payments WHERE id = ? AND customer_id = ?'
+  ).get(req.params.id, req.customer.id);
+  if (!payment) return res.status(404).json({ error: 'Платёж не найден' });
+  if (payment.status !== 'cancelled' && payment.status !== 'canceled') {
+    return res.status(400).json({ error: 'Повторить можно только отменённый платёж' });
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND customer_id = ?')
+    .get(payment.order_id, req.customer.id);
+  if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+
+  // If order is already active or completed, no retry
+  if (order.status === 'active') {
+    return res.status(400).json({ error: 'Заказ уже активирован' });
+  }
+
+  try {
+    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(order.plan_id);
+    const config = order.config ? JSON.parse(order.config) : {};
+
+    // Create new order for retry
+    const newOrder = db.prepare(
+      `INSERT INTO orders (customer_id, plan_id, status, config, price, currency, period)
+       VALUES (?, ?, 'pending', ?, ?, ?, ?)`
+    ).run(
+      req.customer.id, order.plan_id,
+      JSON.stringify(config),
+      order.price, order.currency, order.period
+    );
+
+    const newOrderId = newOrder.lastInsertRowid;
+
+    // Create new payment
+    const newPayment = await yookassa.createPayment({
+      amount: order.price,
+      currency: order.currency,
+      description: plan ? `${plan.name} — ST VILLAGE PROXY` : `Заказ #${newOrderId}`,
+      orderId: newOrderId,
+      customerId: req.customer.id,
+    });
+
+    db.prepare(
+      'INSERT INTO payments (customer_id, order_id, yookassa_payment_id, amount, currency, status, description) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(req.customer.id, newOrderId, newPayment.id, order.price, order.currency, 'pending',
+      plan ? plan.name : `Заказ #${newOrderId}`);
+
+    res.json({
+      payment_id: newPayment.id,
+      order_id: newOrderId,
+      confirmation_url: newPayment.confirmation?.confirmation_url,
+      status: newPayment.status,
+    });
+  } catch (e) {
+    console.error('Payment retry error:', e);
+    res.status(500).json({ error: 'Ошибка при повторе платежа: ' + e.message });
+  }
 });
 
 // ── Manual payment check (client) ─────────────────────────
