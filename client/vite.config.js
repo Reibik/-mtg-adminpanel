@@ -12,5 +12,6 @@ export default defineConfig({
   build: {
     outDir: '../backend/public-client',
     emptyOutDir: true,
+    copyPublicDir: true,
   },
 })

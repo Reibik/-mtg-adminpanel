@@ -22,7 +22,7 @@ RUN npm install --production
 # Copy source
 COPY backend/src ./src
 COPY public ./public
-COPY --from=client-build /build/dist ./public-client
+COPY --from=client-build /backend/public-client ./public-client
 
 EXPOSE 3000
 

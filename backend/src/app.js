@@ -12,10 +12,18 @@ const adminExtraRoutes = require('./routes/admin-extra');
 // ── Config ────────────────────────────────────────────────
 const AUTH_TOKEN = process.env.AUTH_TOKEN || 'changeme';
 const PORT       = process.env.PORT || 3000;
+const fs         = require('fs');
 
-// Version: /app/src/app.js → ../package.json = /app/package.json = backend/package.json in Docker
+// Version: read from VERSION file (mounted at /repo/VERSION or fallback to package.json)
 let pkgVersion = 'unknown';
-try { pkgVersion = require('../package.json').version; } catch (_) {}
+try {
+  const versionFile = fs.existsSync('/repo/VERSION') ? '/repo/VERSION' : path.join(__dirname, '../../VERSION');
+  if (fs.existsSync(versionFile)) {
+    pkgVersion = fs.readFileSync(versionFile, 'utf8').trim();
+  } else {
+    pkgVersion = require('../package.json').version;
+  }
+} catch (_) {}
 
 // ── DB Migrations ─────────────────────────────────────────
 function runMigrations() {
@@ -211,8 +219,7 @@ app.use('/api', (req, res, next) => {
 app.use('/api', adminExtraRoutes);
 
 // ── Self-update (admin only) ──────────────────────────────
-const { execFile } = require('child_process');
-const fs = require('fs');
+const { execFile, execSync } = require('child_process');
 
 app.post('/api/self-update', (req, res) => {
   if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin может обновлять панель' });
@@ -235,15 +242,39 @@ app.post('/api/self-update', (req, res) => {
       return res.json({ status: 'up-to-date', message: 'Уже актуальная версия' });
     }
 
-    // Step 2: Rebuild and restart in background (detached so response goes back before container dies)
-    const child = execFile('sh', ['-c', 'cd /repo && docker compose up -d --build --force-recreate 2>&1'], {
-      timeout: 0,
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
+    // Step 2: Install backend deps if needed
+    try {
+      execSync('cd /repo/backend && npm install --production 2>&1', { timeout: 60000 });
+    } catch (_) {}
 
-    res.json({ status: 'updating', message: 'Обновление запущено. Панель перезапустится через ~30 сек.', gitOutput });
+    // Step 3: Build client
+    try {
+      execSync('cd /repo/client && npm install 2>&1 && npm run build 2>&1', { timeout: 120000 });
+    } catch (buildErr) {
+      return res.status(500).json({ error: 'Client build failed', details: (buildErr.message || '').slice(0, 500) });
+    }
+
+    // Step 4: Copy updated files into running app
+    try {
+      // Copy backend source
+      execSync('cp -r /repo/backend/src/* /app/src/', { timeout: 10000 });
+      // Copy built client
+      execSync('rm -rf /app/public-client && cp -r /repo/backend/public-client /app/public-client', { timeout: 10000 });
+      // Copy admin panel
+      execSync('cp -r /repo/public/* /app/public/', { timeout: 10000 });
+      // Copy package.json (for version)
+      execSync('cp /repo/backend/package.json /app/package.json', { timeout: 5000 });
+    } catch (copyErr) {
+      return res.status(500).json({ error: 'Failed to copy files', details: (copyErr.message || '').slice(0, 500) });
+    }
+
+    // Step 5: Restart the container (graceful — docker will auto-restart it)
+    res.json({ status: 'updating', message: 'Обновление установлено. Панель перезапускается...', gitOutput });
+
+    // Give time for response to be sent, then exit — docker restart policy will restart us
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000);
   });
 });
 
@@ -800,7 +831,6 @@ app.get('/admin*', (req, res) => {
 app.get('*', (req, res) => {
   // Serve client SPA for all non-API, non-admin routes
   const clientIndex = path.join(clientDistPath, 'index.html');
-  const fs = require('fs');
   if (fs.existsSync(clientIndex)) {
     res.sendFile(clientIndex);
   } else {
