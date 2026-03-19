@@ -2529,7 +2529,7 @@ function Settings() {
 
 /* ── НПД Settings (Мой налог) ───────────────────────────── */
 function NpdSettings() {
-  const [settings, setSettings] = useState({ npd_enabled:'', npd_inn:'', npd_password:'' });
+  const [settings, setSettings] = useState({ npd_enabled:'', npd_inn:'', npd_password:'', npd_proxy:'' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -2546,6 +2546,7 @@ function NpdSettings() {
         npd_enabled: settings.npd_enabled === '1',
         npd_inn: settings.npd_inn,
         npd_password: settings.npd_password,
+        npd_proxy: settings.npd_proxy,
       });
       toast('Настройки НПД сохранены','success');
     } catch(e){ toast(e.message,'error'); }
@@ -2604,6 +2605,15 @@ function NpdSettings() {
             {showPassword ? React.createElement(I.EyeOff,{size:16}) : React.createElement(I.Eye,{size:16})}
           </button>
         </div>
+      </div>
+
+      <div className="form-group" style={{marginBottom:16}}>
+        <label className="form-label">Прокси (для доступа к API ФНС)</label>
+        <input className="form-input" type="text" placeholder="socks5://user:pass@host:port или http://host:port"
+          value={settings.npd_proxy||''} onChange={e=>setSettings(s=>({...s, npd_proxy: e.target.value}))}/>
+        <p style={{fontSize:11,color:'var(--t3)',marginTop:4}}>
+          Если сервер за рубежом, укажите российский прокси. Поддержка: socks5://, http://, https://
+        </p>
       </div>
 
       <div style={{display:'flex',gap:8}}>

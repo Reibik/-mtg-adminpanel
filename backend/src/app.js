@@ -292,7 +292,7 @@ app.post('/api/totp/disable', (req, res) => {
 const nalog = require('./nalog');
 
 app.get('/api/npd/settings', (req, res) => {
-  const keys = ['npd_enabled', 'npd_inn', 'npd_password'];
+  const keys = ['npd_enabled', 'npd_inn', 'npd_password', 'npd_proxy'];
   const result = {};
   for (const key of keys) {
     const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
@@ -304,7 +304,7 @@ app.get('/api/npd/settings', (req, res) => {
 });
 
 app.post('/api/npd/settings', (req, res) => {
-  const { npd_enabled, npd_inn, npd_password } = req.body;
+  const { npd_enabled, npd_inn, npd_password, npd_proxy } = req.body;
   if (npd_inn !== undefined) {
     const sanitized = String(npd_inn).replace(/\D/g, '');
     if (sanitized && sanitized.length !== 12) {
@@ -314,6 +314,9 @@ app.post('/api/npd/settings', (req, res) => {
   }
   if (npd_password !== undefined && npd_password !== '••••••••') {
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_password', ?)").run(npd_password);
+  }
+  if (npd_proxy !== undefined) {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_proxy', ?)").run(String(npd_proxy).trim());
   }
   if (npd_enabled !== undefined) {
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('npd_enabled', ?)").run(npd_enabled ? '1' : '0');

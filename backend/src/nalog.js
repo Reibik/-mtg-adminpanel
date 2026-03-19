@@ -1,8 +1,10 @@
 /**
  * Модуль интеграции с API «Мой налог» (НПД / lknpd.nalog.ru)
  * Авто-отправка чеков самозанятого при получении оплаты
+ * Поддержка HTTP/SOCKS5 прокси для серверов за рубежом
  */
 const https = require('https');
+const http = require('http');
 const db = require('./db');
 
 const API_BASE = 'https://lknpd.nalog.ru/api/v1';
@@ -27,11 +29,39 @@ function getCredentials() {
   return { inn, password };
 }
 
+// ── Proxy agent ───────────────────────────────────────────
+function getProxyAgent() {
+  const proxyUrl = getSetting('npd_proxy');
+  if (!proxyUrl) return null;
+
+  try {
+    const url = new URL(proxyUrl);
+    const proto = url.protocol.replace(':', '').toLowerCase();
+
+    if (proto === 'socks5' || proto === 'socks5h' || proto === 'socks4') {
+      const { SocksProxyAgent } = require('socks-proxy-agent');
+      return new SocksProxyAgent(proxyUrl);
+    }
+
+    if (proto === 'http' || proto === 'https') {
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      return new HttpsProxyAgent(proxyUrl);
+    }
+
+    console.warn(`НПД: неизвестный протокол прокси: ${proto}`);
+    return null;
+  } catch (e) {
+    console.error('НПД: ошибка создания proxy agent:', e.message);
+    return null;
+  }
+}
+
 // ── HTTP-запрос ───────────────────────────────────────────
 function request(method, path, body, token) {
   return new Promise((resolve, reject) => {
     const url = new URL(API_BASE + path);
     const postData = body ? JSON.stringify(body) : null;
+    const agent = getProxyAgent();
 
     const options = {
       hostname: url.hostname,
@@ -44,6 +74,7 @@ function request(method, path, body, token) {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...(postData ? { 'Content-Length': Buffer.byteLength(postData) } : {}),
       },
+      ...(agent ? { agent } : {}),
     };
 
     const req = https.request(options, (res) => {

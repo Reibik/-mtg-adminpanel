@@ -16,6 +16,8 @@
     "qrcode": "^1.5.3",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
-    "nodemailer": "^6.9.8"
+    "nodemailer": "^6.9.8",
+    "https-proxy-agent": "^7.0.4",
+    "socks-proxy-agent": "^8.0.3"
   }
 }
