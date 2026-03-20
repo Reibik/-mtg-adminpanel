@@ -1770,7 +1770,7 @@ function NodePage({ node, onBack, onManage, onReload }) {
       {/* System metrics */}
       {sysMetrics && (
         <div className="card" style={{marginBottom:16,padding:'16px 20px'}}>
-          <div style={{fontSize:13,fontWeight:700,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+          <div className="card-title" style={{fontSize:13,fontWeight:700,marginBottom:12}}>
             <I.Activity/> Системные метрики
             <span className="badge badge-purple" style={{fontSize:10}}>Agent v2</span>
           </div>
