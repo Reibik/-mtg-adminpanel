@@ -218,9 +218,279 @@ app.use('/api', (req, res, next) => {
 // ── Admin extra routes (plans, changelog, customers) ──────
 app.use('/api', adminExtraRoutes);
 
-// ── Self-update (admin only) ──────────────────────────────
+// ── Backup system (admin only) ────────────────────────────
 const { execFile, execSync } = require('child_process');
+const archiver = require('archiver');
+const multer = require('multer');
+const tar = require('tar');
 
+const BACKUP_DIR = path.join(process.env.DATA_DIR || '/data', 'backups');
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+// List backups
+app.get('/api/backups', (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.tar.gz'))
+      .map(f => {
+        const stat = fs.statSync(path.join(BACKUP_DIR, f));
+        return { name: f, size: stat.size, created: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => new Date(b.created) - new Date(a.created));
+    
+    // Auto-backup settings
+    const autoSetting = db.prepare("SELECT value FROM settings WHERE key='backup_interval'").get();
+    const lastBackup = db.prepare("SELECT value FROM settings WHERE key='backup_last'").get();
+    
+    res.json({
+      backups: files,
+      autoBackup: {
+        interval: autoSetting?.value || 'off',
+        lastBackup: lastBackup?.value || null,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка чтения бекапов: ' + e.message });
+  }
+});
+
+// Create backup
+app.post('/api/backups/create', async (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  try {
+    const result = await createBackup();
+    res.json(result);
+  } catch (e) {
+    console.error('Backup create error:', e);
+    res.status(500).json({ error: 'Ошибка создания бекапа: ' + e.message });
+  }
+});
+
+async function createBackup(label) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `backup_${label || timestamp}.tar.gz`;
+  const filepath = path.join(BACKUP_DIR, filename);
+  
+  // First, make a safe copy of the database
+  const dbPath = path.join(process.env.DATA_DIR || '/data', 'mtg-panel.db');
+  const dbCopyPath = path.join(BACKUP_DIR, 'mtg-panel.db.bak');
+  await db.backup(dbCopyPath);
+  
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(filepath);
+    const archive = archiver('tar', { gzip: true, gzipOptions: { level: 9 } });
+    
+    output.on('close', () => {
+      // Clean up db copy
+      try { fs.unlinkSync(dbCopyPath); } catch (_) {}
+      
+      // Update last backup time
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('backup_last', ?)").run(new Date().toISOString());
+      
+      const stat = fs.statSync(filepath);
+      resolve({ name: filename, size: stat.size, created: stat.mtime.toISOString() });
+    });
+    
+    archive.on('error', (err) => {
+      try { fs.unlinkSync(dbCopyPath); } catch (_) {}
+      reject(err);
+    });
+    
+    archive.pipe(output);
+    
+    // Add database copy
+    archive.file(dbCopyPath, { name: 'data/mtg-panel.db' });
+    
+    // Add .env if exists
+    const envPath = '/repo/.env';
+    if (fs.existsSync(envPath)) {
+      archive.file(envPath, { name: '.env' });
+    }
+    
+    // Add ssh_keys directory
+    const sshKeysPath = '/repo/ssh_keys';
+    if (fs.existsSync(sshKeysPath)) {
+      archive.directory(sshKeysPath, 'ssh_keys');
+    }
+    
+    // Add VERSION
+    const versionPath = '/repo/VERSION';
+    if (fs.existsSync(versionPath)) {
+      archive.file(versionPath, { name: 'VERSION' });
+    }
+    
+    // Add backup metadata
+    const meta = {
+      version: pkgVersion,
+      commit: gitCommit,
+      created: new Date().toISOString(),
+      hostname: require('os').hostname(),
+    };
+    archive.append(JSON.stringify(meta, null, 2), { name: 'backup-meta.json' });
+    
+    archive.finalize();
+  });
+}
+
+// Download backup
+app.get('/api/backups/:name/download', (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  const name = path.basename(req.params.name); // Prevent path traversal
+  if (!name.endsWith('.tar.gz')) return res.status(400).json({ error: 'Invalid filename' });
+  const filepath = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Бекап не найден' });
+  
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.setHeader('Content-Type', 'application/gzip');
+  fs.createReadStream(filepath).pipe(res);
+});
+
+// Delete backup
+app.delete('/api/backups/:name', (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  const name = path.basename(req.params.name);
+  if (!name.endsWith('.tar.gz')) return res.status(400).json({ error: 'Invalid filename' });
+  const filepath = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Бекап не найден' });
+  
+  fs.unlinkSync(filepath);
+  res.json({ ok: true });
+});
+
+// Upload and restore backup
+const backupUpload = multer({
+  dest: path.join(BACKUP_DIR, 'uploads'),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max
+  fileFilter(req, file, cb) {
+    if (file.originalname.endsWith('.tar.gz') || file.mimetype === 'application/gzip') {
+      cb(null, true);
+    } else {
+      cb(new Error('Только .tar.gz файлы'));
+    }
+  },
+});
+
+app.post('/api/backups/restore', backupUpload.single('backup'), async (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+  
+  const uploadedPath = req.file.path;
+  const extractDir = path.join(BACKUP_DIR, 'restore-tmp');
+  
+  try {
+    // Create auto-backup before restore
+    await createBackup('pre-restore');
+    
+    // Extract
+    if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true });
+    fs.mkdirSync(extractDir, { recursive: true });
+    
+    execSync(`tar -xzf "${uploadedPath}" -C "${extractDir}"`, { timeout: 60000 });
+    
+    // Validate backup contents
+    const metaPath = path.join(extractDir, 'backup-meta.json');
+    if (!fs.existsSync(metaPath)) {
+      throw new Error('Невалидный бекап: отсутствует backup-meta.json');
+    }
+    
+    const dbFile = path.join(extractDir, 'data', 'mtg-panel.db');
+    if (!fs.existsSync(dbFile)) {
+      throw new Error('Невалидный бекап: отсутствует data/mtg-panel.db');
+    }
+    
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    
+    // Restore database
+    const targetDb = path.join(process.env.DATA_DIR || '/data', 'mtg-panel.db');
+    fs.copyFileSync(dbFile, targetDb);
+    
+    // Restore .env
+    const envFile = path.join(extractDir, '.env');
+    if (fs.existsSync(envFile)) {
+      fs.copyFileSync(envFile, '/repo/.env');
+    }
+    
+    // Restore ssh_keys
+    const sshDir = path.join(extractDir, 'ssh_keys');
+    if (fs.existsSync(sshDir)) {
+      const targetSsh = '/repo/ssh_keys';
+      if (!fs.existsSync(targetSsh)) fs.mkdirSync(targetSsh, { recursive: true });
+      for (const f of fs.readdirSync(sshDir)) {
+        fs.copyFileSync(path.join(sshDir, f), path.join(targetSsh, f));
+        fs.chmodSync(path.join(targetSsh, f), 0o600);
+      }
+    }
+    
+    // Cleanup
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    fs.unlinkSync(uploadedPath);
+    
+    // Respond before restart
+    res.json({
+      ok: true,
+      message: 'Бекап восстановлен. Панель перезапускается...',
+      meta,
+    });
+    
+    // Restart to reload DB
+    setTimeout(() => process.exit(0), 1000);
+  } catch (e) {
+    // Cleanup on error
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(uploadedPath); } catch (_) {}
+    console.error('Restore error:', e);
+    res.status(500).json({ error: 'Ошибка восстановления: ' + e.message });
+  }
+});
+
+// Auto-backup settings
+app.put('/api/backups/auto', (req, res) => {
+  if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin' });
+  const { interval } = req.body; // 'off', 'daily', 'weekly'
+  if (!['off', 'daily', 'weekly'].includes(interval)) {
+    return res.status(400).json({ error: 'interval: off, daily, weekly' });
+  }
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('backup_interval', ?)").run(interval);
+  res.json({ ok: true, interval });
+});
+
+// Auto-backup job
+async function runAutoBackup() {
+  try {
+    const setting = db.prepare("SELECT value FROM settings WHERE key='backup_interval'").get();
+    const interval = setting?.value || 'off';
+    if (interval === 'off') return;
+    
+    const lastBackup = db.prepare("SELECT value FROM settings WHERE key='backup_last'").get();
+    const lastTime = lastBackup?.value ? new Date(lastBackup.value) : new Date(0);
+    const now = new Date();
+    
+    const hours = (now - lastTime) / (1000 * 60 * 60);
+    const needed = interval === 'daily' ? 24 : 168; // 24h or 7 days
+    
+    if (hours >= needed) {
+      console.log(`📦 Auto-backup started (${interval})...`);
+      const result = await createBackup(`auto-${interval}`);
+      console.log(`✅ Auto-backup created: ${result.name} (${(result.size / 1024).toFixed(1)} KB)`);
+      
+      // Cleanup old auto-backups (keep last 5)
+      const autoFiles = fs.readdirSync(BACKUP_DIR)
+        .filter(f => f.startsWith('backup_auto-') && f.endsWith('.tar.gz'))
+        .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime }))
+        .sort((a, b) => b.time - a.time);
+      
+      for (const old of autoFiles.slice(5)) {
+        fs.unlinkSync(path.join(BACKUP_DIR, old.name));
+        console.log(`🗑️ Deleted old auto-backup: ${old.name}`);
+      }
+    }
+  } catch (e) {
+    console.error('Auto-backup error:', e.message);
+  }
+}
+
+// ── Self-update (admin only) ──────────────────────────────
 app.post('/api/self-update', (req, res) => {
   if (req.adminRole !== 'admin') return res.status(403).json({ error: 'Только admin может обновлять панель' });
 
@@ -1008,6 +1278,7 @@ setInterval(cleanExpiredUsers, 60  * 60 * 1000);
 setInterval(syncGitHubChangelog, 60 * 60 * 1000);
 setInterval(() => clientRoutes.processAutoRenewals().catch(e => console.error('Auto-renewal error:', e)), 3600000);
 setInterval(() => clientRoutes.checkPendingPayments().catch(e => console.error('Payment check error:', e)), 2 * 60 * 1000);
+setInterval(() => runAutoBackup().catch(e => console.error('Auto-backup error:', e)), 60 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🔒 MTG Panel running on http://0.0.0.0:${PORT}`);
@@ -1018,4 +1289,5 @@ app.listen(PORT, () => {
   setTimeout(syncGitHubChangelog, 3000);
   setTimeout(() => clientRoutes.processAutoRenewals().catch(() => {}), 15000);
   setTimeout(() => clientRoutes.checkPendingPayments().catch(() => {}), 20000);
+  setTimeout(() => runAutoBackup().catch(() => {}), 30000);
 });
