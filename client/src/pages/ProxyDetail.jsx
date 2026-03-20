@@ -42,6 +42,8 @@ export default function ProxyDetail() {
       setStats(s.data);
       setHistory(h.data || []);
       setPing(pg.data?.ping ?? -1);
+    }).catch(() => {
+      toast.error('Не удалось загрузить данные прокси');
     }).finally(() => setLoading(false));
   };
 

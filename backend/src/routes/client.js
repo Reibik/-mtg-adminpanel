@@ -476,21 +476,29 @@ router.post('/orders/:id/pay-balance', auth.authCustomer, async (req, res) => {
   if (order.status !== 'pending') return res.status(400).json({ error: 'Заказ уже оплачен или отменён' });
 
   const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.customer.id);
+  if (!customer) return res.status(404).json({ error: 'Клиент не найден' });
   const balance = customer.balance || 0;
   if (balance < order.price) {
     return res.status(400).json({ error: `Недостаточно средств. На балансе: ${balance.toFixed(2)} ₽, нужно: ${order.price} ₽` });
   }
 
   try {
-    // Deduct balance
-    db.prepare('UPDATE customers SET balance = balance - ? WHERE id = ?').run(order.price, req.customer.id);
+    // Atomic balance deduction (prevents double-spending race condition)
+    const deducted = db.prepare(
+      'UPDATE customers SET balance = balance - ? WHERE id = ? AND balance >= ?'
+    ).run(order.price, req.customer.id, order.price);
+    if (deducted.changes === 0) {
+      return res.status(400).json({ error: 'Недостаточно средств' });
+    }
+
+    // Pre-fetch plan name
+    const planName = db.prepare('SELECT name FROM plans WHERE id = ?').get(order.plan_id)?.name || `Заказ #${order.id}`;
 
     // Create payment record
     db.prepare(
       `INSERT INTO payments (customer_id, order_id, yookassa_payment_id, amount, currency, status, method, description, confirmed_at)
        VALUES (?, ?, ?, ?, ?, 'succeeded', 'balance', ?, datetime('now'))`
-    ).run(req.customer.id, order.id, `balance_${order.id}_${Date.now()}`, order.price, order.currency,
-      db.prepare('SELECT name FROM plans WHERE id = ?').get(order.plan_id)?.name || `Заказ #${order.id}`);
+    ).run(req.customer.id, order.id, `balance_${order.id}_${Date.now()}`, order.price, order.currency, planName);
 
     // Activate order
     await activateOrder(order);
@@ -555,12 +563,16 @@ router.delete('/orders/:id', auth.authCustomer, async (req, res) => {
           console.error(`Failed to remove proxy ${order.user_name} from node:`, e.message);
         }
       }
-      // Remove from users table
-      db.prepare('DELETE FROM users WHERE node_id = ? AND name = ?').run(order.node_id, order.user_name);
     }
 
-    // Cancel the order
-    db.prepare("UPDATE orders SET status = 'cancelled', auto_renew = 0 WHERE id = ?").run(order.id);
+    // Atomic: delete user + cancel order in transaction
+    const cancelTransaction = db.transaction(() => {
+      if (order.node_id && order.user_name) {
+        db.prepare('DELETE FROM users WHERE node_id = ? AND name = ?').run(order.node_id, order.user_name);
+      }
+      db.prepare("UPDATE orders SET status = 'cancelled', auto_renew = 0 WHERE id = ?").run(order.id);
+    });
+    cancelTransaction();
 
     res.json({ ok: true });
   } catch (e) {
@@ -1081,8 +1093,15 @@ async function processAutoRenewals() {
       const balance = order.balance || 0;
 
       if (balance >= price) {
-        // Auto-renew from balance
-        db.prepare('UPDATE customers SET balance = balance - ? WHERE id = ?').run(price, order.customer_id);
+        // Atomic balance deduction (prevents double-spending)
+        const deducted = db.prepare(
+          'UPDATE customers SET balance = balance - ? WHERE id = ? AND balance >= ?'
+        ).run(price, order.customer_id, price);
+
+        if (deducted.changes === 0) {
+          console.log(`⚠️ Auto-renewal skipped for order #${order.id}: insufficient balance (race)`);
+          continue;
+        }
 
         // Extend expiry
         let newExpiry = new Date(order.expires_at);

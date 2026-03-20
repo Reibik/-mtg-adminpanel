@@ -430,7 +430,10 @@ app.post('/api/env-settings', (req, res) => {
     const merged = { ...existingVars };
     for (const [key, val] of Object.entries(vars)) {
       if (SENSITIVE_KEYS.has(key) && val === '••••••••') continue; // keep existing
-      merged[key] = val;
+      // Validate key format (only uppercase letters, digits, underscore)
+      if (!/^[A-Z_][A-Z0-9_]*$/.test(String(key))) continue;
+      // Sanitize value (strip newlines to prevent injection)
+      merged[key] = String(val).replace(/[\r\n]/g, '');
     }
 
     // Build .env content grouped
@@ -464,6 +467,9 @@ app.get('/api/nodes', (req, res) => {
 app.post('/api/nodes', (req, res) => {
   const { name, host, ssh_user, ssh_port, ssh_key, ssh_password, base_dir, start_port, flag, agent_port } = req.body;
   if (!name || !host) return res.status(400).json({ error: 'name и host обязательны' });
+  if (host.length > 255 || !/^[a-zA-Z0-9.\-:]+$/.test(host)) return res.status(400).json({ error: 'Invalid host' });
+  if (ssh_port && (isNaN(ssh_port) || ssh_port < 1 || ssh_port > 65535)) return res.status(400).json({ error: 'Invalid SSH port' });
+  if (agent_port && (isNaN(agent_port) || agent_port < 1 || agent_port > 65535)) return res.status(400).json({ error: 'Invalid agent port' });
   const result = db.prepare(
     'INSERT INTO nodes (name, host, ssh_user, ssh_port, ssh_key, ssh_password, base_dir, start_port, flag, agent_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(name, host, ssh_user||'root', ssh_port||22, ssh_key||null, ssh_password||null, base_dir||'/opt/mtg/users', start_port||4433, flag||null, agent_port||null);
@@ -559,8 +565,10 @@ app.get('/api/nodes/:id/agent-version', async (req, res) => {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
   if (!node) return res.status(404).json({ error: 'Not found' });
   if (!node.agent_port) return res.json({ version: null, reason: 'no agent_port' });
+  const port = parseInt(node.agent_port, 10);
+  if (!port || port < 1 || port > 65535) return res.json({ version: null, reason: 'invalid agent_port' });
   try {
-    const r = await ssh.sshExec(node, `curl -s -m 5 http://127.0.0.1:${node.agent_port}/version 2>/dev/null || echo '{"version":"unknown"}'`);
+    const r = await ssh.sshExec(node, `curl -s -m 5 http://127.0.0.1:${port}/version 2>/dev/null || echo '{"version":"unknown"}'`);
     const parsed = JSON.parse((r.output||'{}').trim());
     res.json({ version: parsed.version || 'unknown' });
   } catch (e) { res.json({ version: 'error', error: e.message }); }
@@ -660,6 +668,7 @@ app.post('/api/nodes/:id/users', async (req, res) => {
   if (!node) return res.status(404).json({ error: 'Node not found' });
   const { name, note, expires_at, traffic_limit_gb } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  if (!/^[a-zA-Z0-9_-]{1,50}$/.test(name)) return res.status(400).json({ error: 'Invalid name: only a-z, 0-9, _, - allowed (max 50 chars)' });
   if (db.prepare('SELECT id FROM users WHERE node_id = ? AND name = ?').get(req.params.id, name)) {
     return res.status(400).json({ error: 'User already exists' });
   }
