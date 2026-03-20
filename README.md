@@ -1,8 +1,8 @@
-# ST VILLAGE AdminPanel v2.4.0
+# ST VILLAGE AdminPanel v2.5.0
 
 Веб-панель управления MTG прокси серверами (Telegram MTPROTO proxy). Управление нодами, клиентами, тарифами и платежами через единый интерфейс. Включает клиентский сайт с регистрацией, оплатой через YooKassa и личным кабинетом.
 
-![Version](https://img.shields.io/badge/version-2.4.0-blue)
+![Version](https://img.shields.io/badge/version-2.5.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Docker](https://img.shields.io/badge/docker-required-blue)
@@ -45,6 +45,9 @@
 - Управление базой данных: статистика таблиц, оптимизация (VACUUM), очистка
 - Объявления для клиентов
 - Changelog — журнал обновлений
+- **Системные метрики ноды** — CPU, RAM, диск, аптайм прямо в карточке ноды (Agent v2)
+- **Управление контейнерами** — перезапуск / остановка / запуск из панели
+- **Логи контейнеров** — просмотр последних 200 строк в модальном окне
 - Проверка обновлений панели, MTG прокси и агента через GitHub (git commit hash)
 
 ### Клиентский сайт
@@ -63,12 +66,17 @@
 - Автопродление заказов
 - PWA с мобильной навигацией
 
-### MTG Agent
+### MTG Agent v2.0
 - Лёгкий HTTP агент на каждой ноде (Python FastAPI)
 - Метрики MTG контейнеров через Docker SDK
+- **Системные метрики**: CPU (ядра, load avg), RAM, диск, аптайм через `/proc`
+- **Per-container ресурсы**: CPU%, память, аптайм контейнера
 - Подсчёт уникальных IP через `/proc/{pid}/net/tcp6`
-- Эндпоинты: `/version`, `/health`, `/metrics`
-- Docker с `pid: host` + `network_mode: host`
+- **Управление контейнерами**: restart, stop, start через HTTP
+- **Логи контейнеров**: получение последних N строк
+- **Кэширование метрик** (15 сек) с фоновым обновлением — мгновенные ответы
+- Эндпоинты: `/version`, `/health`, `/metrics`, `/system`, `/containers/{name}/restart|stop|start|logs`
+- Docker с `pid: host` + `network_mode: host`, healthcheck, JSON-логирование
 - Установка и обновление через панель одной кнопкой
 
 ---
@@ -102,8 +110,9 @@
 
 ### Логика метрик
 
-1. **С агентом** (рекомендуется): Панель → HTTP к агенту → агент читает `/proc/{pid}/net/tcp6` → уникальные IP к порту 3128
-2. **Без агента** (SSH fallback): Панель → SSH → shell → медленнее, нет онлайн-устройств
+1. **С агентом v2** (рекомендуется): Панель → HTTP к агенту → метрики контейнеров + системные метрики (CPU/RAM/диск) + кэш 15 сек
+2. **С агентом v1**: Панель → HTTP к агенту → агент читает `/proc/{pid}/net/tcp6` → уникальные IP
+3. **Без агента** (SSH fallback): Панель → SSH → shell → медленнее, нет онлайн-устройств и системных метрик
 
 ---
 
@@ -324,7 +333,11 @@ mtg-adminpanel/
 | GET | `/api/nodes/:id/mtg-version` | Версия MTG образа |
 | GET | `/api/nodes/:id/agent-version` | Версия агента |
 | POST | `/api/nodes/:id/mtg-update` | Docker pull MTG |
-| GET | `/api/status` | Статус всех нод |
+| GET | `/api/status` | Статус всех нод (+ системные метрики) |
+| GET | `/api/nodes/:id/system` | Системные метрики ноды (Agent v2) |
+| GET | `/api/nodes/:id/full-metrics` | Контейнеры + система |
+| POST | `/api/nodes/:id/containers/:name/:action` | Управление контейнером (restart/stop/start) |
+| GET | `/api/nodes/:id/containers/:name/logs` | Логи контейнера |
 
 ### Прокси-пользователи (admin)
 
@@ -412,13 +425,18 @@ mtg-adminpanel/
 | GET | `/announcements` | Объявления |
 | POST | `/webhook/yookassa` | Webhook (IP-verified) |
 
-### MTG Agent API (на ноде, порт 8081)
+### MTG Agent API v2 (на ноде, порт 8081)
 
 | Метод | URL | Заголовок | Описание |
 |-------|-----|-----------|----------|
 | GET | `/version` | — | Версия агента |
 | GET | `/health` | — | Проверка доступности |
-| GET | `/metrics` | `x-agent-token: TOKEN` | Метрики контейнеров |
+| GET | `/metrics` | `x-agent-token: TOKEN` | Метрики контейнеров + система |
+| GET | `/system` | `x-agent-token: TOKEN` | Системные метрики (CPU/RAM/диск/аптайм) |
+| POST | `/containers/{name}/restart` | `x-agent-token: TOKEN` | Перезапуск контейнера |
+| POST | `/containers/{name}/stop` | `x-agent-token: TOKEN` | Остановка контейнера |
+| POST | `/containers/{name}/start` | `x-agent-token: TOKEN` | Запуск контейнера |
+| GET | `/containers/{name}/logs?tail=N` | `x-agent-token: TOKEN` | Логи контейнера (последние N строк) |
 
 ---
 
@@ -450,6 +468,7 @@ mtg-adminpanel/
 | Переменная | Описание | По умолчанию |
 |-----------|----------|-------------|
 | `AGENT_TOKEN` | Токен авторизации | `mtg-agent-secret` |
+| `CACHE_TTL` | TTL кэша метрик (секунды) | `15` |
 
 ---
 
@@ -510,6 +529,12 @@ docker compose down && docker compose up -d --build
 ---
 
 ## Changelog
+
+### v2.5.0 (2026-03-20)
+- **Agent v2.0** — системные метрики (CPU/RAM/диск/аптайм), per-container ресурсы, кэш 15 сек, управление контейнерами, логи
+- **Админ: метрики ноды** — карточка CPU/RAM/Диск/Аптайм с прогресс-барами
+- **Админ: управление контейнерами** — перезапуск / остановка / запуск / логи из страницы ноды
+- Новые API: `/system`, `/full-metrics`, `/containers/:name/:action`, `/containers/:name/logs`
 
 ### v2.4.0 (2026-03-19)
 - **Баланс клиента** — карточка баланса на дашборде, пополнение через ЮКассу (100/200/500/1000 ₽ + произвольная сумма)
