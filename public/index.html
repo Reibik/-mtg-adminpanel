@@ -887,6 +887,24 @@ function StatPill({count, label, color, dot, large}) {
   );
 }
 
+function fmtB(bytes) {
+  if (!bytes) return '0';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' ГБ';
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(0) + ' МБ';
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' КБ';
+  return bytes + ' Б';
+}
+
+function fmtUptime(seconds) {
+  if (!seconds) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}д ${h}ч`;
+  if (h > 0) return `${h}ч ${m}м`;
+  return `${m}м`;
+}
+
 function FlagPicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const current = COUNTRIES.find(c => c.code === value);
@@ -1628,17 +1646,22 @@ function NodePage({ node, onBack, onManage, onReload }) {
   const [traffic, setTraffic] = useState({});
   const [loading, setLoading] = useState(true);
   const [modalEdit, setModalEdit] = useState(false);
+  const [sysMetrics, setSysMetrics] = useState(null);
+  const [logsModal, setLogsModal] = useState(null); // {name, logs}
 
   const loadData = useCallback(async () => {
     try {
-      const [st, u, tr] = await Promise.allSettled([
+      const requests = [
         api('GET', `/api/nodes/${node.id}/check`),
         api('GET', `/api/nodes/${node.id}/users`),
         api('GET', `/api/nodes/${node.id}/traffic`),
-      ]);
+      ];
+      if (node.agent_port) requests.push(api('GET', `/api/nodes/${node.id}/system`));
+      const [st, u, tr, sys] = await Promise.allSettled(requests);
       if(st.status==='fulfilled') setStatus(st.value);
       if(u.status==='fulfilled')  setUsers(u.value||[]);
       if(tr.status==='fulfilled') setTraffic(tr.value||{});
+      if(sys && sys.status==='fulfilled' && sys.value.available) setSysMetrics(sys.value);
     } catch {} finally { setLoading(false); }
   }, [node.id]);
 
@@ -1647,6 +1670,22 @@ function NodePage({ node, onBack, onManage, onReload }) {
     const t = setInterval(loadData, 20000);
     return () => clearInterval(t);
   }, [loadData]);
+
+  const containerAction = async (userName, action) => {
+    try {
+      toast(`${action === 'restart' ? 'Перезапуск' : action === 'stop' ? 'Остановка' : 'Запуск'}...`, 'info');
+      await api('POST', `/api/nodes/${node.id}/containers/${userName}/${action}`);
+      toast(`${userName}: ${action === 'restart' ? 'перезапущен' : action === 'stop' ? 'остановлен' : 'запущен'}`, 'success');
+      setTimeout(loadData, 2000);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  const showLogs = async (userName) => {
+    try {
+      const data = await api('GET', `/api/nodes/${node.id}/containers/${userName}/logs?tail=200`);
+      setLogsModal({ name: userName, logs: data.logs || 'Логи пусты' });
+    } catch (e) { toast('Ошибка: ' + e.message, 'error'); }
+  };
 
   const isOnline = status ? status.online : null;
   const active      = users.filter(u => u.running).length;
@@ -1713,6 +1752,52 @@ function NodePage({ node, onBack, onManage, onReload }) {
         </div>
       )}
 
+      {/* System metrics */}
+      {sysMetrics && (
+        <div className="card" style={{marginBottom:16,padding:'16px 20px'}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+            <I.Activity/> Системные метрики
+            <span className="badge badge-purple" style={{fontSize:10}}>Agent v2</span>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+            {/* CPU */}
+            <div style={{background:'var(--bg2)',borderRadius:10,padding:'12px 16px'}}>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>CPU ({sysMetrics.cpu?.cores || '?'} ядер)</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <div style={{fontSize:11,color:'var(--t3)',whiteSpace:'nowrap'}}>Load: {(sysMetrics.load_avg||[0])[0]?.toFixed(2)}</div>
+              </div>
+            </div>
+            {/* RAM */}
+            <div style={{background:'var(--bg2)',borderRadius:10,padding:'12px 16px'}}>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>RAM</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                <span style={{fontSize:20,fontWeight:700,color: sysMetrics.memory?.percent > 90 ? 'var(--danger)' : sysMetrics.memory?.percent > 70 ? '#f59e0b' : 'var(--vi)'}}>{sysMetrics.memory?.percent || 0}%</span>
+                <span style={{fontSize:11,color:'var(--t3)'}}>{fmtB(sysMetrics.memory?.used)} / {fmtB(sysMetrics.memory?.total)}</span>
+              </div>
+              <div style={{height:4,borderRadius:2,background:'var(--bg3)',marginTop:6,overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:2,width:`${Math.min(sysMetrics.memory?.percent||0,100)}%`,background: sysMetrics.memory?.percent > 90 ? 'var(--danger)' : sysMetrics.memory?.percent > 70 ? '#f59e0b' : 'var(--vi)',transition:'width .3s'}}/>
+              </div>
+            </div>
+            {/* Disk */}
+            <div style={{background:'var(--bg2)',borderRadius:10,padding:'12px 16px'}}>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>Диск</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                <span style={{fontSize:20,fontWeight:700,color: sysMetrics.disk?.percent > 90 ? 'var(--danger)' : sysMetrics.disk?.percent > 70 ? '#f59e0b' : 'var(--vi)'}}>{sysMetrics.disk?.percent || 0}%</span>
+                <span style={{fontSize:11,color:'var(--t3)'}}>{fmtB(sysMetrics.disk?.used)} / {fmtB(sysMetrics.disk?.total)}</span>
+              </div>
+              <div style={{height:4,borderRadius:2,background:'var(--bg3)',marginTop:6,overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:2,width:`${Math.min(sysMetrics.disk?.percent||0,100)}%`,background: sysMetrics.disk?.percent > 90 ? 'var(--danger)' : sysMetrics.disk?.percent > 70 ? '#f59e0b' : 'var(--vi)',transition:'width .3s'}}/>
+              </div>
+            </div>
+            {/* Uptime */}
+            <div style={{background:'var(--bg2)',borderRadius:10,padding:'12px 16px'}}>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>Аптайм</div>
+              <div style={{fontSize:16,fontWeight:700,color:'var(--t1)'}}>{fmtUptime(sysMetrics.uptime_seconds)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Clients table */}
       <div className="card">
         {loading ? <div className="loading-center"><span className="spin"/> Загружаю...</div> : (
@@ -1737,7 +1822,13 @@ function NodePage({ node, onBack, onManage, onReload }) {
                       <td>
                         <div className="acts">
                           <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>copyText(u.link)} title="Копировать ссылку"><I.Copy/></button>
-                          <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>onManage(node)} title="Управление клиентом"><I.Edit/></button>
+                          {u.running
+                            ? <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>containerAction(u.name,'restart')} title="Перезапуск"><I.RefreshCw/></button>
+                            : <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>containerAction(u.name,'start')} title="Запустить"><I.Play/></button>
+                          }
+                          {u.running && <button className="btn btn-icon btn-secondary btn-sm" style={{color:'var(--danger)'}} onClick={()=>containerAction(u.name,'stop')} title="Остановить"><I.Pause/></button>}
+                          <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>showLogs(u.name)} title="Логи"><I.FileText/></button>
+                          <button className="btn btn-icon btn-secondary btn-sm" onClick={()=>onManage(node)} title="Управление"><I.Edit/></button>
                         </div>
                       </td>
                     </tr>
@@ -1751,6 +1842,21 @@ function NodePage({ node, onBack, onManage, onReload }) {
       </div>
 
       {modalEdit && <NodeModal node={node} onClose={()=>setModalEdit(false)} onSave={()=>{setModalEdit(false);onReload();}}/>}
+
+      {logsModal && (
+        <div className="overlay" onClick={e=>e.target===e.currentTarget&&setLogsModal(null)}>
+          <div className="modal" style={{maxWidth:700,maxHeight:'80vh'}}>
+            <div className="modal-head">
+              <div className="modal-title"><I.FileText/> Логи — mtg-{logsModal.name}</div>
+              <button className="modal-close" onClick={()=>setLogsModal(null)}><I.X/></button>
+            </div>
+            <div className="modal-body" style={{padding:0}}>
+              <pre style={{fontFamily:'var(--mono)',fontSize:11,lineHeight:1.6,padding:16,margin:0,maxHeight:'60vh',overflow:'auto',background:'var(--bg)',color:'var(--t2)',whiteSpace:'pre-wrap',wordBreak:'break-all'}}>{logsModal.logs}</pre>
+            </div>
+            <div className="modal-foot"><button className="btn btn-ghost" onClick={()=>setLogsModal(null)} style={{width:'100%',justifyContent:'center'}}>Закрыть</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

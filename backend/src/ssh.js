@@ -4,13 +4,13 @@ const http = require('http');
 const AGENT_TOKEN = process.env.AGENT_TOKEN || 'mtg-agent-secret';
 
 // ── Agent HTTP client ─────────────────────────────────────
-function agentFetch(host, port, path) {
+function agentFetch(host, port, path, method = 'GET') {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: host,
       port: parseInt(port),
       path,
-      method: 'GET',
+      method,
       headers: { 'x-agent-token': AGENT_TOKEN },
     }, res => {
       let data = '';
@@ -27,12 +27,30 @@ function agentFetch(host, port, path) {
 }
 
 async function getAgentMetrics(node) {
-  if (!node.agent_port) return null; // no agent configured for this node
+  if (!node.agent_port) return null;
   try {
     const data = await agentFetch(node.host, node.agent_port, '/metrics');
     return data.containers || null;
   } catch {
-    return null; // agent unavailable — fall back to SSH
+    return null;
+  }
+}
+
+async function getAgentFullMetrics(node) {
+  if (!node.agent_port) return null;
+  try {
+    return await agentFetch(node.host, node.agent_port, '/metrics');
+  } catch {
+    return null;
+  }
+}
+
+async function getAgentSystem(node) {
+  if (!node.agent_port) return null;
+  try {
+    return await agentFetch(node.host, node.agent_port, '/system');
+  } catch {
+    return null;
   }
 }
 
@@ -40,9 +58,27 @@ async function checkAgentHealth(node) {
   if (!node.agent_port) return false;
   try {
     const data = await agentFetch(node.host, node.agent_port, '/health');
-    return data.status === 'ok';
+    return data.status === 'ok' || data.status === 'degraded';
   } catch {
     return false;
+  }
+}
+
+async function agentContainerAction(node, containerName, action) {
+  if (!node.agent_port) return null;
+  try {
+    return await agentFetch(node.host, node.agent_port, `/containers/${containerName}/${action}`, 'POST');
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function agentContainerLogs(node, containerName, tail = 100) {
+  if (!node.agent_port) return null;
+  try {
+    return await agentFetch(node.host, node.agent_port, `/containers/${containerName}/logs?tail=${tail}`);
+  } catch {
+    return null;
   }
 }
 
@@ -229,4 +265,5 @@ module.exports = {
   sshExec, checkNode, checkAgentHealth,
   getNodeStatus, getRemoteUsers, getTraffic,
   createRemoteUser, removeRemoteUser, stopRemoteUser, startRemoteUser,
+  getAgentFullMetrics, getAgentSystem, agentContainerAction, agentContainerLogs,
 };

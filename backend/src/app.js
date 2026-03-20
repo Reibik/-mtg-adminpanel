@@ -844,6 +844,65 @@ app.get('/api/nodes/:id/agent-version', async (req, res) => {
   } catch (e) { res.json({ version: 'error', error: e.message }); }
 });
 
+// Node system metrics (via agent)
+app.get('/api/nodes/:id/system', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+  const data = await ssh.getAgentSystem(node);
+  if (!data) return res.json({ available: false });
+  res.json({ available: true, ...data });
+});
+
+// Full node metrics (containers + system, via agent)
+app.get('/api/nodes/:id/full-metrics', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+  const data = await ssh.getAgentFullMetrics(node);
+  if (!data) return res.json({ available: false });
+  res.json({ available: true, ...data });
+});
+
+// Container management via agent (restart/stop/start)
+app.post('/api/nodes/:id/containers/:name/:action', async (req, res) => {
+  const { id, name, action } = req.params;
+  if (!['restart', 'stop', 'start'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+
+  // Try agent first (faster, no SSH overhead)
+  const agentResult = await ssh.agentContainerAction(node, name, action);
+  if (agentResult && agentResult.ok) return res.json(agentResult);
+
+  // Fallback to SSH
+  try {
+    if (action === 'restart') {
+      await ssh.sshExec(node, `cd ${node.base_dir}/${name} && docker compose restart 2>/dev/null`);
+    } else if (action === 'stop') {
+      await ssh.stopRemoteUser(node, name);
+    } else {
+      await ssh.startRemoteUser(node, name);
+    }
+    res.json({ ok: true, status: action + 'ed', via: 'ssh' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Container logs via agent
+app.get('/api/nodes/:id/containers/:name/logs', async (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return res.status(404).json({ error: 'Not found' });
+  const tail = Math.min(Math.max(parseInt(req.query.tail) || 100, 1), 1000);
+
+  // Try agent first
+  const data = await ssh.agentContainerLogs(node, req.params.name, tail);
+  if (data) return res.json(data);
+
+  // Fallback to SSH
+  try {
+    const r = await ssh.sshExec(node, `docker logs --tail ${tail} --timestamps mtg-${req.params.name} 2>&1`);
+    res.json({ container: `mtg-${req.params.name}`, logs: r.output, lines: tail, via: 'ssh' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/nodes/:id/mtg-update', async (req, res) => {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
   if (!node) return res.status(404).json({ error: 'Not found' });
@@ -858,15 +917,18 @@ app.get('/api/status', async (req, res) => {
   const results = await Promise.allSettled(
     nodes.map(async node => {
       const status = await ssh.getNodeStatus(node);
-      // online_users only via agent (fast) — skip SSH nodes to avoid slowdown
       let online_users = 0;
+      let system = null;
       if (node.agent_port) {
         try {
-          const remoteUsers = await ssh.getRemoteUsers(node);
-          online_users = remoteUsers.filter(u => (u.connections || 0) > 0).length;
+          const fullData = await ssh.getAgentFullMetrics(node);
+          if (fullData) {
+            online_users = (fullData.containers || []).filter(c => (c.connections || 0) > 0).length;
+            system = fullData.system || null;
+          }
         } catch (_) {}
       }
-      return { id: node.id, name: node.name, host: node.host, ...status, online_users };
+      return { id: node.id, name: node.name, host: node.host, ...status, online_users, system };
     })
   );
   res.json(results.map((r, i) => r.status === 'fulfilled'
